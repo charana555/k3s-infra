@@ -1,0 +1,33 @@
+# Kubernetes secrets and sensitive data
+secrets/*
+!secrets/.gitkeep
+!secrets/README.md
+*.key
+*.pem
+*.crt
+kubeconfig*
+
+# Local environment
+.env
+.env.local
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+
+# Terraform (if used)
+.terraform/
+*.tfstate
+*.tfstate.backup
+
+# Helm charts (if using chart repos)
+charts/*.tgz
