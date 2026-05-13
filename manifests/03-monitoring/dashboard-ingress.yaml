@@ -30,6 +30,8 @@ spec:
       middlewares:
         - name: dashboard-auth
           namespace: kubernetes-dashboard
+        - name: strip-auth-header
+          namespace: kubernetes-dashboard
       services:
         - name: kubernetes-dashboard
           port: 443
