@@ -86,6 +86,7 @@ spec:
   tls:
   - hosts:
     - charana.dev
+    - www.charana.dev
     secretName: charana-dev-tls
   rules:
   - host: charana.dev
@@ -98,3 +99,15 @@ spec:
             name: portfolio-v2
             port:
               number: 80
+  - host: www.charana.dev
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: portfolio-v2
+            port:
+              number: 80
+               
+
