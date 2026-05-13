@@ -7,7 +7,7 @@ type: Opaque
 stringData:
   users: "admin:$apr1$.yQ0vZQU$KY/HBLm0YtOWmgpSP3vgJ/"
 ---
-apiVersion: traefik.containo.us/v1alpha1
+apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
   name: dashboard-auth
@@ -16,10 +16,30 @@ spec:
   basicAuth:
     secret: dashboard-auth-secret
 ---
-apiVersion: traefik.containo.us/v1alpha1
+apiVersion: traefik.io/v1alpha1
 kind: ServersTransport
 metadata:
   name: dashboard-transport
   namespace: kubernetes-dashboard
 spec:
   insecureSkipVerify: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-https
+  namespace: kubernetes-dashboard
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-auth-header
+  namespace: kubernetes-dashboard
+spec:
+  headers:
+    customRequestHeaders:
+      Authorization: ""
