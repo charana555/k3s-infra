@@ -22,3 +22,11 @@ metadata:
   labels:
     environment: system
     managed-by: k3s-infra
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: apps
+  labels:
+    environment: apps
+    managed-by: k3s-infra
