@@ -1,4 +1,4 @@
-apiVersion: networking.k3s.io/v1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: kubernetes-dashboard
@@ -13,10 +13,10 @@ metadata:
 spec:
   tls:
     - hosts:
-        - k3s.charana.dev
-      secretName: k3s-charana-dev-tls
+        - k8s.charana.dev
+      secretName: k8s-charana-dev-tls
   rules:
-    - host: k3s.charana.dev
+    - host: k8s.charana.dev
       http:
         paths:
           - path: /

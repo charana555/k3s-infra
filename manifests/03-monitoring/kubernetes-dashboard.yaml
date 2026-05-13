@@ -9,7 +9,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   labels:
-    k3s-app: kubernetes-dashboard
+    k8s-app: kubernetes-dashboard
   name: kubernetes-dashboard
   namespace: kubernetes-dashboard
 
@@ -19,7 +19,7 @@ kind: Service
 apiVersion: v1
 metadata:
   labels:
-    k3s-app: kubernetes-dashboard
+    k8s-app: kubernetes-dashboard
   name: kubernetes-dashboard
   namespace: kubernetes-dashboard
 spec:
@@ -27,7 +27,7 @@ spec:
     - port: 443
       targetPort: 8443
   selector:
-    k3s-app: kubernetes-dashboard
+    k8s-app: kubernetes-dashboard
 
 ---
 
@@ -35,7 +35,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   labels:
-    k3s-app: kubernetes-dashboard
+    k8s-app: kubernetes-dashboard
   name: kubernetes-dashboard-certs
   namespace: kubernetes-dashboard
 type: Opaque
@@ -46,7 +46,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   labels:
-    k3s-app: kubernetes-dashboard
+    k8s-app: kubernetes-dashboard
   name: kubernetes-dashboard-csrf
   namespace: kubernetes-dashboard
 type: Opaque
@@ -59,7 +59,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   labels:
-    k3s-app: kubernetes-dashboard
+    k8s-app: kubernetes-dashboard
   name: kubernetes-dashboard-key-holder
   namespace: kubernetes-dashboard
 type: Opaque
@@ -70,17 +70,17 @@ kind: ConfigMap
 apiVersion: v1
 metadata:
   labels:
-    k3s-app: kubernetes-dashboard
+    k8s-app: kubernetes-dashboard
   name: kubernetes-dashboard-settings
   namespace: kubernetes-dashboard
 
 ---
 
 kind: Role
-apiVersion: rbac.authorization.k3s.io/v1
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
-    k3s-app: kubernetes-dashboard
+    k8s-app: kubernetes-dashboard
   name: kubernetes-dashboard
   namespace: kubernetes-dashboard
 rules:
@@ -104,27 +104,27 @@ rules:
 ---
 
 kind: ClusterRole
-apiVersion: rbac.authorization.k3s.io/v1
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
-    k3s-app: kubernetes-dashboard
+    k8s-app: kubernetes-dashboard
   name: kubernetes-dashboard
 rules:
-  - apiGroups: ["metrics.k3s.io"]
+  - apiGroups: ["metrics.k8s.io"]
     resources: ["pods", "nodes"]
     verbs: ["get", "list", "watch"]
 
 ---
 
-apiVersion: rbac.authorization.k3s.io/v1
+apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   labels:
-    k3s-app: kubernetes-dashboard
+    k8s-app: kubernetes-dashboard
   name: kubernetes-dashboard
   namespace: kubernetes-dashboard
 roleRef:
-  apiGroup: rbac.authorization.k3s.io
+  apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: kubernetes-dashboard
 subjects:
@@ -134,12 +134,12 @@ subjects:
 
 ---
 
-apiVersion: rbac.authorization.k3s.io/v1
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: kubernetes-dashboard
 roleRef:
-  apiGroup: rbac.authorization.k3s.io
+  apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: kubernetes-dashboard
 subjects:
@@ -153,7 +153,7 @@ kind: Deployment
 apiVersion: apps/v1
 metadata:
   labels:
-    k3s-app: kubernetes-dashboard
+    k8s-app: kubernetes-dashboard
   name: kubernetes-dashboard
   namespace: kubernetes-dashboard
 spec:
@@ -161,11 +161,11 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      k3s-app: kubernetes-dashboard
+      k8s-app: kubernetes-dashboard
   template:
     metadata:
       labels:
-        k3s-app: kubernetes-dashboard
+        k8s-app: kubernetes-dashboard
     spec:
       securityContext:
         seccompProfile:
@@ -216,7 +216,7 @@ kind: Service
 apiVersion: v1
 metadata:
   labels:
-    k3s-app: dashboard-metrics-scraper
+    k8s-app: dashboard-metrics-scraper
   name: dashboard-metrics-scraper
   namespace: kubernetes-dashboard
 spec:
@@ -224,7 +224,7 @@ spec:
     - port: 8000
       targetPort: 8000
   selector:
-    k3s-app: dashboard-metrics-scraper
+    k8s-app: dashboard-metrics-scraper
 
 ---
 
@@ -232,7 +232,7 @@ kind: Deployment
 apiVersion: apps/v1
 metadata:
   labels:
-    k3s-app: dashboard-metrics-scraper
+    k8s-app: dashboard-metrics-scraper
   name: dashboard-metrics-scraper
   namespace: kubernetes-dashboard
 spec:
@@ -240,11 +240,11 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      k3s-app: dashboard-metrics-scraper
+      k8s-app: dashboard-metrics-scraper
   template:
     metadata:
       labels:
-        k3s-app: dashboard-metrics-scraper
+        k8s-app: dashboard-metrics-scraper
     spec:
       securityContext:
         seccompProfile:
