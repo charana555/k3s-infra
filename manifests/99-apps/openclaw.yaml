@@ -57,7 +57,7 @@ data:
           "openrouter": {
             "baseUrl": "https://openrouter.ai/api/v1",
             "apiKey": "${env:OPENROUTER_API_KEY}",
-            "api": "openai",
+            "api": "openai-completions",
             "contextWindow": 8192,
             "timeoutSeconds": 60,
             "models": [
