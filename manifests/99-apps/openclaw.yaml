@@ -54,7 +54,20 @@ data:
     {
       "agents": {
         "defaults": {
-          "model": "bedrock/kimi-latest"
+          "model": {
+            "primary": "bedrock-mantle/moonshotai.kimi-k2.5",
+            "fallbacks": [
+              "bedrock-mantle/moonshotai.kimi-latest"
+            ]
+          },
+          "models": {
+            "bedrock-mantle/moonshotai.kimi-k2.5": { "alias": "Kimi K2.5" },
+            "bedrock-mantle/moonshotai.kimi-latest": { "alias": "Kimi Latest" },
+            "bedrock-mantle/deepseek.v3.2": { "alias": "DeepSeek V3.2" },
+            "bedrock-mantle/qwen.qwen3-coder-480b-a35b-instruct": { "alias": "Qwen3 Coder 480B" },
+            "bedrock-mantle/openai.gpt-oss-120b": { "alias": "GPT OSS 120B" },
+            "bedrock-mantle/mistral.mistral-large-3-675b-instruct": { "alias": "Mistral Large 3" }
+          }
         }
       },
       "gateway": {
