@@ -58,7 +58,7 @@ data:
           "models": {
             "ollama/qwen2.5:7b-instruct-q4_K_M": {
               "alias": "Qwen 2.5 7B",
-              "baseUrl": "http://ollama.apps.svc.cluster.local:11434/v1"
+              "url": "http://ollama.apps.svc.cluster.local:11434"
             }
           }
         }
