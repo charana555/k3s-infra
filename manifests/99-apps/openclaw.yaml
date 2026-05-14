@@ -52,8 +52,13 @@ metadata:
 data:
   openclaw.json: |
     {
-      "agent": {
-        "model": "bedrock/kimi-latest"
+      "agents": {
+        "defaults": {
+          "model": "bedrock/kimi-latest",
+          "auth": {
+            "profile": "bedrock"
+          }
+        }
       },
       "gateway": {
         "mode": "local",
