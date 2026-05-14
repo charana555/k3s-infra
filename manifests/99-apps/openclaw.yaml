@@ -67,9 +67,6 @@ data:
                 "params": {
                   "num_ctx": 32768,
                   "thinking": false
-                },
-                "compat": {
-                  "supportsTools": false
                 }
               }
             ]
@@ -95,6 +92,7 @@ data:
         "mode": "local",
         "bind": "lan",
         "port": 18789,
+        "trustedProxies": ["10.42.0.0/16"],
         "controlUi": {
           "allowedOrigins": [
             "https://openclaw.charana.dev",
@@ -105,11 +103,12 @@ data:
       "channels": {
         "telegram": {
           "enabled": true,
-          "dmPolicy": "pairing"
+          "dmPolicy": "pairing",
+          "botToken": "${env:TELEGRAM_BOT_TOKEN}"
         }
       }
     }
----
+--
 apiVersion: apps/v1
 kind: Deployment
 metadata:
