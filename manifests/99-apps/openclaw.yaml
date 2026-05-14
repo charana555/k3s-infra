@@ -54,21 +54,18 @@ data:
     {
       "models": {
         "providers": {
-          "ollama": {
-            "baseUrl": "http://ollama.apps.svc.cluster.local:11434",
-            "apiKey": "ollama-local",
-            "api": "ollama",
-            "contextWindow": 4096,
-            "timeoutSeconds": 300,
+          "openrouter": {
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "apiKey": "${env:OPENROUTER_API_KEY}",
+            "api": "openai",
+            "contextWindow": 8192,
+            "timeoutSeconds": 60,
             "models": [
               {
-                "id": "qwen2.5:7b-instruct-q4_K_M",
-                "name": "Qwen 2.5 7B",
+                "id": "meta-llama/llama-3.2-3b-instruct:free",
+                "name": "Llama 3.2 3B Free",
                 "input": ["text"],
-                "params": {
-                  "num_ctx": 4096,
-                  "thinking": false
-                }
+                "params": {}
               }
             ]
           }
@@ -77,15 +74,12 @@ data:
       "agents": {
         "defaults": {
           "model": {
-            "primary": "ollama/qwen2.5:7b-instruct-q4_K_M"
+            "primary": "openrouter/meta-llama/llama-3.2-3b-instruct:free"
           },
           "models": {
-            "ollama/qwen2.5:7b-instruct-q4_K_M": {
-              "alias": "Qwen 2.5 7B"
+            "openrouter/meta-llama/llama-3.2-3b-instruct:free": {
+              "alias": "Llama 3.2 3B Free"
             }
-          },
-          "experimental": {
-            "localModelLean": true
           }
         }
       },
@@ -168,6 +162,11 @@ spec:
             secretKeyRef:
               name: openclaw-secrets
               key: telegram-bot-token
+        - name: OPENROUTER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: openrouter-api-key
         resources:
           requests:
             memory: "512Mi"
