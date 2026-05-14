@@ -33,7 +33,7 @@ spec:
             - containerPort: 11434
           resources:
             requests:
-              memory: "6Gi"
+              memory: "8Gi"
               cpu: "1"
             limits:
               memory: "14Gi"   # cap so k3s + openclaw aren't starved

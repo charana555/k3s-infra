@@ -58,14 +58,15 @@ data:
             "baseUrl": "http://ollama.apps.svc.cluster.local:11434",
             "apiKey": "ollama-local",
             "api": "ollama",
-            "contextWindow": 32768,
+            "contextWindow": 4096,
+            "timeoutSeconds": 300,
             "models": [
               {
                 "id": "qwen2.5:7b-instruct-q4_K_M",
                 "name": "Qwen 2.5 7B",
                 "input": ["text"],
                 "params": {
-                  "num_ctx": 32768,
+                  "num_ctx": 4096,
                   "thinking": false
                 }
               }
