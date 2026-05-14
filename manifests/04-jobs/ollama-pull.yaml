@@ -3,7 +3,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: pull-qwen
-  namespace: ollama
+  namespace: apps 
 spec:
   template:
     spec:
