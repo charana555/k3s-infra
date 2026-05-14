@@ -1,5 +1,5 @@
 # Kubernetes secrets and sensitive data
-secrets/*
+#secrets/*
 !secrets/.gitkeep
 !secrets/README.md
 *.key
