@@ -1,0 +1,20 @@
+# pull-model.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pull-qwen
+  namespace: ollama
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: pull
+          image: curlimages/curl:latest
+          command:
+            - sh
+            - -c
+            - |
+              curl -X POST http://ollama.ollama.svc.cluster.local:11434/api/pull \
+                -d '{"name":"qwen2.5:7b-instruct-q4_K_M"}' \
+                --max-time 600
