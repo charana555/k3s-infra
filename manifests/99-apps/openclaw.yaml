@@ -54,10 +54,7 @@ data:
     {
       "agents": {
         "defaults": {
-          "model": "bedrock/kimi-latest",
-          "auth": {
-            "profile": "bedrock"
-          }
+          "model": "bedrock/kimi-latest"
         }
       },
       "gateway": {
