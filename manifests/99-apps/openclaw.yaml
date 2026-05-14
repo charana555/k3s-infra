@@ -62,8 +62,8 @@ data:
             "timeoutSeconds": 60,
             "models": [
               {
-                "id": "meta-llama/llama-3.2-3b-instruct:free",
-                "name": "Llama 3.2 3B Free",
+                "id": "google/gemini-2.0-flash-lite-001",
+                "name": "Gemini 2.0 Flash Lite",
                 "input": ["text"],
                 "params": {}
               }
@@ -74,11 +74,11 @@ data:
       "agents": {
         "defaults": {
           "model": {
-            "primary": "openrouter/meta-llama/llama-3.2-3b-instruct:free"
+            "primary": "openrouter/google/gemini-2.0-flash-lite-001"
           },
           "models": {
-            "openrouter/meta-llama/llama-3.2-3b-instruct:free": {
-              "alias": "Llama 3.2 3B Free"
+            "openrouter/google/gemini-2.0-flash-lite-001": {
+              "alias": "Gemini 2.0 Flash Lite"
             }
           }
         }
