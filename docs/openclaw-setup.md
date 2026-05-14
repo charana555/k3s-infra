@@ -2,13 +2,31 @@
 
 ## Prerequisites
 
-1. AWS Bedrock access with `kimi-latest` model enabled (bearer token auth)
+1. Ollama running in cluster with `qwen2.5:7b-instruct-q4_K_M` model pulled
 2. Telegram bot token (from [@BotFather](https://t.me/BotFather))
 3. kubectl access to the k3s cluster
 
 ## Setup Steps
 
-### 1. Create the secrets file
+### 1. Deploy Ollama
+
+```bash
+kubectl apply -f manifests/99-apps/ollama.yaml
+```
+
+Wait for Ollama to be ready:
+
+```bash
+kubectl get pods -n apps -l app=ollama -w
+```
+
+Pull the model into Ollama:
+
+```bash
+kubectl exec -n apps -it deploy/ollama -- ollama pull qwen2.5:7b-instruct-q4_K_M
+```
+
+### 2. Create the secrets file
 
 ```bash
 cp secrets/openclaw-secrets.yaml secrets/openclaw-secrets.local.yaml
@@ -16,59 +34,66 @@ cp secrets/openclaw-secrets.yaml secrets/openclaw-secrets.local.yaml
 
 Edit `secrets/openclaw-secrets.local.yaml` and fill in your actual credentials:
 
-- `aws-bearer-token-bedrock`: Your AWS Bedrock bearer token
-- `aws-region`: AWS region for Bedrock (e.g., `ap-south-1`)
 - `gateway-token`: Generate a random token: `openssl rand -hex 32`
 - `telegram-bot-token`: From BotFather on Telegram
 
-### 2. Create a Telegram Bot
+### 3. Create a Telegram Bot
 
 1. Open Telegram and search for `@BotFather`
 2. Send `/newbot` and follow the prompts
 3. Copy the bot token to your secrets file
 
-### 3. Apply the secrets
+### 4. Apply the secrets
 
 ```bash
 kubectl apply -f secrets/openclaw-secrets.local.yaml
 ```
 
-### 4. Apply the manifests
+### 5. Apply the OpenClaw manifest
 
 ```bash
 kubectl apply -f manifests/99-apps/openclaw.yaml
 ```
 
-### 5. Verify the deployment
+### 6. Verify the deployment
 
 ```bash
 kubectl get pods -n apps -l app=openclaw
 kubectl logs -n apps -l app=openclaw --follow
 ```
 
-### 6. Access the Control UI
+### 7. Access the Control UI
 
 Open `https://openclaw.charana.dev` in your browser and enter the gateway token
 you set in the secrets.
 
-### 7. Configure Telegram channel
+### 8. Configure Telegram channel
 
 After the pod is running and healthy, configure the Telegram channel:
 
 ```bash
-# Exec into the running pod
 kubectl exec -n apps -it deploy/openclaw -- node dist/index.js channels add --channel telegram --token "$TELEGRAM_BOT_TOKEN"
 ```
 
 Or use the Control UI to add the Telegram channel.
 
-### 8. Pair your Telegram account
+### 9. Pair your Telegram account
 
 Send a message to your bot on Telegram. You will receive a pairing code.
 Approve it:
 
 ```bash
 kubectl exec -n apps -it deploy/openclaw -- node dist/index.js pairing approve telegram <CODE>
+```
+
+## Architecture
+
+```
+Telegram <--> OpenClaw Gateway <--> Ollama (qwen2.5:7b)
+                (apps namespace)       (apps namespace)
+                     |
+                     v
+           Control UI (openclaw.charana.dev)
 ```
 
 ## Configuration
@@ -81,14 +106,25 @@ To update configuration:
 2. Re-apply: `kubectl apply -f manifests/99-apps/openclaw.yaml`
 3. Restart the pod: `kubectl rollout restart deployment/openclaw -n apps`
 
+### Changing Ollama models
+
+1. Pull the new model: `kubectl exec -n apps -it deploy/ollama -- ollama pull <model>`
+2. Update the ConfigMap in `manifests/99-apps/openclaw.yaml` with the new model name
+3. Apply and restart: `kubectl apply -f manifests/99-apps/openclaw.yaml && kubectl rollout restart deployment/openclaw -n apps`
+
 ## Updating
 
-```bash
-# Pull the latest image
-kubectl set image deployment/openclaw openclaw=ghcr.io/openclaw/openclaw:latest -n apps
+### OpenClaw
 
-# Or pin a specific version
-kubectl set image deployment/openclaw openclaw=ghcr.io/openclaw/openclaw:2026.5.14 -n apps
+```bash
+kubectl set image deployment/openclaw openclaw=ghcr.io/openclaw/openclaw:latest -n apps
+```
+
+### Ollama
+
+```bash
+kubectl set image deployment/ollama ollama=ollama/ollama:latest -n apps
+kubectl rollout restart deployment/ollama -n apps
 ```
 
 ## Troubleshooting
@@ -98,6 +134,19 @@ kubectl set image deployment/openclaw openclaw=ghcr.io/openclaw/openclaw:2026.5.
 ```bash
 kubectl describe pod -n apps -l app=openclaw
 kubectl logs -n apps -l app=openclaw --previous
+```
+
+### Ollama not responding
+
+```bash
+kubectl logs -n apps -l app=ollama --follow
+kubectl exec -n apps -it deploy/ollama -- ollama list
+```
+
+### Model not found in Ollama
+
+```bash
+kubectl exec -n apps -it deploy/ollama -- ollama pull qwen2.5:7b-instruct-q4_K_M
 ```
 
 ### Permission errors on PVC
@@ -123,11 +172,12 @@ kubectl exec -n apps -it deploy/openclaw -- curl -s http://localhost:18789/ready
 
 ## Storage
 
-| PVC | Mount Path | Size | Purpose |
-|-----|-----------|------|---------|
-| `openclaw-config` | `/home/node/.openclaw` | 2Gi | Config, auth profiles, installed plugins |
-| `openclaw-workspace` | `/home/node/.openclaw/workspace` | 5Gi | Workspace, skills, session data |
-| `openclaw-auth-profiles` | `/home/node/.config/openclaw` | 256Mi | Auth profile encryption keys |
+| PVC | Namespace | Mount Path | Size | Purpose |
+|-----|-----------|-----------|------|---------|
+| `openclaw-config` | apps | `/home/node/.openclaw` | 2Gi | Config, auth profiles, installed plugins |
+| `openclaw-workspace` | apps | `/home/node/.openclaw/workspace` | 5Gi | Workspace, skills, session data |
+| `openclaw-auth-profiles` | apps | `/home/node/.config/openclaw` | 256Mi | Auth profile encryption keys |
+| `ollama-data` | apps | `/root/.ollama` | 20Gi | Ollama models and data |
 
 ## Security Notes
 
@@ -136,3 +186,4 @@ kubectl exec -n apps -it deploy/openclaw -- curl -s http://localhost:18789/ready
 - TLS is auto-provisioned via cert-manager + Let's Encrypt
 - Secrets are stored in Kubernetes Secrets (not committed to git)
 - The `secrets/` directory is excluded via `.gitignore`
+- Ollama is only accessible within the cluster (ClusterIP, no ingress)

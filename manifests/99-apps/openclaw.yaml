@@ -54,19 +54,12 @@ data:
     {
       "agents": {
         "defaults": {
-          "model": {
-            "primary": "bedrock-mantle/moonshotai.kimi-k2.5",
-            "fallbacks": [
-              "bedrock-mantle/moonshotai.kimi-latest"
-            ]
-          },
+          "model": "ollama/qwen2.5:7b-instruct-q4_K_M",
           "models": {
-            "bedrock-mantle/moonshotai.kimi-k2.5": { "alias": "Kimi K2.5" },
-            "bedrock-mantle/moonshotai.kimi-latest": { "alias": "Kimi Latest" },
-            "bedrock-mantle/deepseek.v3.2": { "alias": "DeepSeek V3.2" },
-            "bedrock-mantle/qwen.qwen3-coder-480b-a35b-instruct": { "alias": "Qwen3 Coder 480B" },
-            "bedrock-mantle/openai.gpt-oss-120b": { "alias": "GPT OSS 120B" },
-            "bedrock-mantle/mistral.mistral-large-3-675b-instruct": { "alias": "Mistral Large 3" }
+            "ollama/qwen2.5:7b-instruct-q4_K_M": {
+              "alias": "Qwen 2.5 7B",
+              "baseUrl": "http://ollama.apps.svc.cluster.local:11434/v1"
+            }
           }
         }
       },
@@ -137,16 +130,6 @@ spec:
           value: "production"
         - name: OPENCLAW_DISABLE_BONJOUR
           value: "1"
-        - name: AWS_BEARER_TOKEN_BEDROCK
-          valueFrom:
-            secretKeyRef:
-              name: openclaw-secrets
-              key: aws-bearer-token-bedrock
-        - name: AWS_REGION
-          valueFrom:
-            secretKeyRef:
-              name: openclaw-secrets
-              key: aws-region
         - name: OPENCLAW_GATEWAY_TOKEN
           valueFrom:
             secretKeyRef:
