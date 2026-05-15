@@ -74,14 +74,8 @@ data:
                 "params": {}
               },
               {
-                "id": "deepseek/deepseek-v4-flash:free",
-                "name": "DeepSeek V4 Flash Free",
-                "input": ["text"],
-                "params": {}
-              },
-              {
-                "id": "moonshotai/kimi-k2.5u",
-                "name": "Kimi K2.5",
+                "id": "moonshotai/kimi-k2.6",
+                "name": "Kimi K2.6",
                 "input": ["text"],
                 "params": {}
               }
@@ -95,7 +89,7 @@ data:
             "primary": "openrouter/z-ai/glm-4.5-air:free",
             "fallbacks" : [
               "openrouter/deepseek/deepseek-v4-flash:free",
-              "openrouter/moonshotai/kimi-k2.5"
+              "openrouter/moonshotai/kimi-k2.6"
             ]
           },
           "models": {
@@ -105,8 +99,8 @@ data:
             "openrouter/deepseek/deepseek-v4-flash:free": {
               "alias": "DeepSeek V4 Flash Free"
             },
-            "openrouter/moonshotai/kimi-k2.5": {
-               "alias": "Kimi K2.5"
+            "openrouter/moonshotai/kimi-k2.6": {
+               "alias": "Kimi K2.6"
             },
             "openrouter/moonshotai/kimi-k2-thinking": {
                "alias": "Kimi K2 Thinking"
@@ -205,11 +199,11 @@ spec:
               key: bedrock-api-key
         resources:
           requests:
-            memory: "512Mi"
-            cpu: "250m"
+            memory: "1Gi"
+            cpu: "500m"
           limits:
-            memory: "2Gi"
-            cpu: "1000m"
+            memory: "3Gi"
+            cpu: "1500m"
         livenessProbe:
           httpGet:
             path: /healthz
