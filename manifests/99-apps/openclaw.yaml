@@ -66,6 +66,12 @@ data:
                 "name": "GLM 4.5 Air Free",
                 "input": ["text"],
                 "params": {}
+              },
+              {
+                "id": "anthropic/claude-3.5-haiku",
+                "name": "Claude 3.5 Haiku",
+                "input": ["text"],
+                "params": {}
               }
             ]
           }
@@ -79,7 +85,10 @@ data:
           "models": {
             "openrouter/z-ai/glm-4.5-air:free": {
               "alias": "GLM 4.5 Air Free"
-            }
+            },
+           "openrouter/anthropic/claude-3.5-haiku": {
+               "alias": "Claude 3.5 Haiku (Fallback)"
+           }
           }
         }
       },
