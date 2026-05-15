@@ -54,6 +54,27 @@ data:
     {
       "models": {
         "providers": {
+          "bedrock-mantle": {
+            "baseUrl": "https://bedrock-mantle.us-east-1.api.aws/v1",
+            "apiKey": "${env:BEDROCK_API_KEY}",
+            "api": "openai-completions",
+            "contextWindow": 32000,
+            "timeoutSeconds": 120,
+            "models": [
+              {
+                "id": "moonshotai.kimi-k2.5",
+                "name": "Kimi K2.5",
+                "input": ["text"],
+                "params": {}
+              },
+              {
+                "id": "moonshot.kimi-k2-thinking",
+                "name": "Kimi K2 Thinking",
+                "input": ["text"],
+                "params": {}
+              }
+            ]
+          },
           "openrouter": {
             "baseUrl": "https://openrouter.ai/api/v1",
             "apiKey": "${env:OPENROUTER_API_KEY}",
@@ -80,7 +101,10 @@ data:
       "agents": {
         "defaults": {
           "model": {
-            "primary": "openrouter/z-ai/glm-4.5-air:free"
+            "primary": "openrouter/z-ai/glm-4.5-air:free",
+            "fallbacks" : [
+               "bedrock-mantle/moonshotai.kimi-k2.5"
+            ]
           },
           "models": {
             "openrouter/z-ai/glm-4.5-air:free": {
@@ -95,6 +119,12 @@ data:
             "openrouter/moonshotai/kimi-k2-thinking": {
                "alias": "Kimi K2 Thinking (Bedrock)"
             },
+            "bedrock-mantle/moonshotai.kimi-k2.5": {
+               "alias": "Kimi K2.5 (AWS)"
+            },
+            "bedrock-mantle/moonshot.kimi-k2-thinking": {
+              "alias": "Kimi K2 Thinking (AWS)"
+            }
           }
         }
       },
@@ -182,6 +212,11 @@ spec:
             secretKeyRef:
               name: openclaw-secrets
               key: openrouter-api-key
+        - name: BEDROCK_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: bedrock-api-key
         resources:
           requests:
             memory: "512Mi"
