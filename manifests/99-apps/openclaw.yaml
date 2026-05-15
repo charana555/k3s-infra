@@ -57,9 +57,9 @@ data:
           "openrouter": {
             "baseUrl": "https://openrouter.ai/api/v1",
             "apiKey": "${env:OPENROUTER_API_KEY}",
-            "api": "openai-completions",
+            "api": "openai-chat",
             "contextWindow": 131072,
-            "timeoutSeconds": 60,
+            "timeoutSeconds": 120,
             "models": [
               {
                 "id": "z-ai/glm-4.5-air:free",
@@ -106,6 +106,15 @@ data:
                "alias": "Kimi K2 Thinking"
             }
           }
+        }
+      },
+      "auth": {
+        "cooldowns": {
+          "overloadedProfileRotations": 1,
+          "overloadedBackoffMs": 30000,
+          "rateLimitedProfileRotations": 1,
+          "billingBackoffHours": 1,
+          "billingMaxHours": 24
         }
       },
       "gateway": {
@@ -197,6 +206,12 @@ spec:
             secretKeyRef:
               name: openclaw-secrets
               key: bedrock-api-key
+        - name: OPENCLAW_DEBUG_MODEL_TRANSPORT
+          value: "1"
+        - name: OPENCLAW_DEBUG_MODEL_PAYLOAD
+          value: "full-redacted"
+        - name: OPENCLAW_LOG_LEVEL
+          value: "debug"
         resources:
           requests:
             memory: "1Gi"
