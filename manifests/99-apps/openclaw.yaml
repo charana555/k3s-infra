@@ -68,6 +68,24 @@ data:
                 "params": {}
               }
             ]
+          },
+          "ollama": {
+            "baseUrl": "http://ollama.apps.svc.cluster.local:11434",
+            "apiKey": "ollama-local",
+            "api": "ollama",
+            "contextWindow": 8192,
+            "timeoutSeconds": 300,
+            "models": [
+              {
+                "id": "gemma3:4b",
+                "name": "Gemma 3 4B",
+                "input": ["text", "image"],
+                "params": {
+                  "num_ctx": 8192,
+                  "thinking": false
+                }
+              }
+            ]
           }
         }
       },
@@ -79,6 +97,9 @@ data:
           "models": {
             "openrouter/google/gemini-2.0-flash-lite-001": {
               "alias": "Gemini 2.0 Flash Lite"
+            },
+            "ollama/gemma3:4b": {
+              "alias": "Gemma 3 4B (Fallback)"
             }
           }
         }
