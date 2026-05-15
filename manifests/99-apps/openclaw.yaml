@@ -58,32 +58,14 @@ data:
             "baseUrl": "https://openrouter.ai/api/v1",
             "apiKey": "${env:OPENROUTER_API_KEY}",
             "api": "openai-completions",
-            "contextWindow": 8192,
+            "contextWindow": 131072,
             "timeoutSeconds": 60,
             "models": [
               {
-                "id": "google/gemini-2.0-flash-lite-001",
-                "name": "Gemini 2.0 Flash Lite",
+                "id": "z-ai/glm-4.5-air:free",
+                "name": "GLM 4.5 Air Free",
                 "input": ["text"],
                 "params": {}
-              }
-            ]
-          },
-          "ollama": {
-            "baseUrl": "http://ollama.apps.svc.cluster.local:11434",
-            "apiKey": "ollama-local",
-            "api": "ollama",
-            "contextWindow": 8192,
-            "timeoutSeconds": 300,
-            "models": [
-              {
-                "id": "gemma3:4b",
-                "name": "Gemma 3 4B",
-                "input": ["text", "image"],
-                "params": {
-                  "num_ctx": 8192,
-                  "thinking": false
-                }
               }
             ]
           }
@@ -92,14 +74,11 @@ data:
       "agents": {
         "defaults": {
           "model": {
-            "primary": "openrouter/google/gemini-2.0-flash-lite-001"
+            "primary": "openrouter/z-ai/glm-4.5-air:free"
           },
           "models": {
-            "openrouter/google/gemini-2.0-flash-lite-001": {
-              "alias": "Gemini 2.0 Flash Lite"
-            },
-            "ollama/gemma3:4b": {
-              "alias": "Gemma 3 4B (Fallback)"
+            "openrouter/z-ai/glm-4.5-air:free": {
+              "alias": "GLM 4.5 Air Free"
             }
           }
         }
