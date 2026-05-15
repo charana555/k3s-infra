@@ -54,27 +54,6 @@ data:
     {
       "models": {
         "providers": {
-          "bedrock-mantle": {
-            "baseUrl": "https://bedrock-mantle.us-east-1.api.aws/v1",
-            "apiKey": "${env:AWS_BEARER_TOKEN_BEDROCK}",
-            "api": "openai-completions",
-            "contextWindow": 32000,
-            "timeoutSeconds": 120,
-            "models": [
-              {
-                "id": "moonshotai.kimi-k2.5",
-                "name": "Kimi K2.5",
-                "input": ["text"],
-                "params": {}
-              },
-              {
-                "id": "moonshot.kimi-k2-thinking",
-                "name": "Kimi K2 Thinking",
-                "input": ["text"],
-                "params": {}
-              }
-            ]
-          },
           "openrouter": {
             "baseUrl": "https://openrouter.ai/api/v1",
             "apiKey": "${env:OPENROUTER_API_KEY}",
@@ -89,8 +68,20 @@ data:
                 "params": {}
               },
               {
-                "id": "anthropic/claude-3.5-haiku",
-                "name": "Claude 3.5 Haiku",
+                "id": "deepseek/deepseek-v4-flash:free",
+                "name": "DeepSeek V4 Flash Free",
+                "input": ["text"],
+                "params": {}
+              },
+              {
+                "id": "deepseek/deepseek-v4-flash:free",
+                "name": "DeepSeek V4 Flash Free",
+                "input": ["text"],
+                "params": {}
+              },
+              {
+                "id": "moonshotai/kimi-k2.5u",
+                "name": "Kimi K2.5",
                 "input": ["text"],
                 "params": {}
               }
@@ -103,27 +94,22 @@ data:
           "model": {
             "primary": "openrouter/z-ai/glm-4.5-air:free",
             "fallbacks" : [
-               "bedrock-mantle/moonshotai.kimi-k2.5"
+              "openrouter/deepseek/deepseek-v4-flash:free",
+              "openrouter/moonshotai/kimi-k2.5"
             ]
           },
           "models": {
             "openrouter/z-ai/glm-4.5-air:free": {
               "alias": "GLM 4.5 Air Free"
             },
-            "openrouter/anthropic/claude-3.5-haiku": {
-               "alias": "Claude 3.5 Haiku (Fallback)"
+            "openrouter/deepseek/deepseek-v4-flash:free": {
+              "alias": "DeepSeek V4 Flash Free"
             },
             "openrouter/moonshotai/kimi-k2.5": {
-               "alias": "Kimi K2.5 (Bedrock)"
+               "alias": "Kimi K2.5"
             },
             "openrouter/moonshotai/kimi-k2-thinking": {
-               "alias": "Kimi K2 Thinking (Bedrock)"
-            },
-            "bedrock-mantle/moonshotai.kimi-k2.5": {
-               "alias": "Kimi K2.5 (AWS)"
-            },
-            "bedrock-mantle/moonshot.kimi-k2-thinking": {
-              "alias": "Kimi K2 Thinking (AWS)"
+               "alias": "Kimi K2 Thinking"
             }
           }
         }
