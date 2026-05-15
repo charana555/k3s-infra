@@ -54,25 +54,33 @@ data:
     {
       "models": {
         "providers": {
-          "openrouter": {
-            "baseUrl": "https://openrouter.ai/api/v1",
-            "apiKey": "${env:OPENROUTER_API_KEY}",
-            "api": "openai-chat",
-            "contextWindow": 131072,
+          "google": {
+            "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+            "apiKey": "${env:GEMINI_API_KEY}",
+            "api": "google-generative-ai",
             "timeoutSeconds": 120,
             "models": [
               {
-                "id": "z-ai/glm-4.5-air:free",
-                "name": "GLM 4.5 Air Free",
+                "id": "gemini-2.5-flash",
+                "name": "Gemini 2.5 Flash",
                 "input": ["text"],
                 "params": {}
               },
               {
-                "id": "deepseek/deepseek-v4-flash:free",
-                "name": "DeepSeek V4 Flash Free",
+                "id": "gemini-2.5-pro-preview-05-06",
+                "name": "Gemini 2.5 Pro",
                 "input": ["text"],
                 "params": {}
-              },
+              }
+            ]
+          },
+          "openrouter": {
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "apiKey": "${env:OPENROUTER_API_KEY}",
+            "api": "openai-completions",
+            "contextWindow": 131072,
+            "timeoutSeconds": 120,
+            "models": [
               {
                 "id": "moonshotai/kimi-k2.6",
                 "name": "Kimi K2.6",
@@ -86,24 +94,24 @@ data:
       "agents": {
         "defaults": {
           "model": {
-            "primary": "openrouter/z-ai/glm-4.5-air:free",
+            "primary": "google/gemini-2.5-flash",
             "fallbacks" : [
-              "openrouter/deepseek/deepseek-v4-flash:free",
+              "google/gemini-2.5-pro-preview-05-06",
               "openrouter/moonshotai/kimi-k2.6"
             ]
           },
           "models": {
-            "openrouter/z-ai/glm-4.5-air:free": {
-              "alias": "GLM 4.5 Air Free"
+            "google/gemini-2.5-flash": {
+              "alias": "Gemini 2.5 Flash"
             },
-            "openrouter/deepseek/deepseek-v4-flash:free": {
-              "alias": "DeepSeek V4 Flash Free"
+            "google/gemini-2.5-pro-preview-05-06": {
+              "alias": "Gemini 2.5 Pro"
             },
             "openrouter/moonshotai/kimi-k2.6": {
-               "alias": "Kimi K2.6"
+              "alias": "Kimi K2.6"
             },
             "openrouter/moonshotai/kimi-k2-thinking": {
-               "alias": "Kimi K2 Thinking"
+              "alias": "Kimi K2 Thinking"
             }
           }
         }
@@ -201,6 +209,11 @@ spec:
             secretKeyRef:
               name: openclaw-secrets
               key: openrouter-api-key
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: gemini-api-key
         - name: AWS_BEARER_TOKEN_BEDROCK
           valueFrom:
             secretKeyRef:
