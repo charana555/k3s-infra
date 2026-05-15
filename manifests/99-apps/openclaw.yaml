@@ -86,9 +86,15 @@ data:
             "openrouter/z-ai/glm-4.5-air:free": {
               "alias": "GLM 4.5 Air Free"
             },
-           "openrouter/anthropic/claude-3.5-haiku": {
+            "openrouter/anthropic/claude-3.5-haiku": {
                "alias": "Claude 3.5 Haiku (Fallback)"
-           }
+            },
+            "openrouter/moonshotai/kimi-k2.5": {
+               "alias": "Kimi K2.5 (Bedrock)"
+            },
+            "openrouter/moonshotai/kimi-k2-thinking": {
+               "alias": "Kimi K2 Thinking (Bedrock)"
+            },
           }
         }
       },
