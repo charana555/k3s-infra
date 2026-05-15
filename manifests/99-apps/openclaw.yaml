@@ -67,8 +67,8 @@ data:
                 "params": {}
               },
               {
-                "id": "gemini-2.5-pro-preview-05-06",
-                "name": "Gemini 2.5 Pro",
+                "id": "gemini-3.1-pro-preview",
+                "name": "Gemini 3.1 Pro",
                 "input": ["text"],
                 "params": {}
               }
@@ -96,7 +96,7 @@ data:
           "model": {
             "primary": "google/gemini-2.5-flash",
             "fallbacks" : [
-              "google/gemini-2.5-pro-preview-05-06",
+              "google/gemini-3.1-pro-preview",
               "openrouter/moonshotai/kimi-k2.6"
             ]
           },
@@ -104,8 +104,8 @@ data:
             "google/gemini-2.5-flash": {
               "alias": "Gemini 2.5 Flash"
             },
-            "google/gemini-2.5-pro-preview-05-06": {
-              "alias": "Gemini 2.5 Pro"
+            "google/gemini-3.1-pro-preview": {
+              "alias": "Gemini 3.1 Pro"
             },
             "openrouter/moonshotai/kimi-k2.6": {
               "alias": "Kimi K2.6"
