@@ -12,6 +12,7 @@ spec:
       - radarr.charana.dev
       - prowlarr.charana.dev
       - torrent.charana.dev
+      - sonarr.charana.dev
     secretName: media-dev-tls
   rules:
     - host: radarr.charana.dev
@@ -44,3 +45,13 @@ spec:
               name: qbittorrent
               port:
                 number: 8080
+    - host: sonarr.charana.dev
+      http:
+        paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sonarr
+              port:
+                number: 8989
