@@ -22,3 +22,11 @@ metadata:
   labels:
     environment: nas
     managed-by: k3s-infra
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: media
+  labels:
+    environment: media
+    managed-by: k3s-infra
