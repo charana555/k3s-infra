@@ -49,17 +49,6 @@ wait_for_pods() {
     }
 }
 
-echo -e "\n${YELLOW}Step 1: Applying secrets...${NC}"
-if [ -f "$SECRETS_DIR/nas-secrets.yaml" ]; then
-    apply_file "$SECRETS_DIR/nas-secrets.yaml"
-else
-    echo -e "${RED}  Error: nas-secrets.yaml not found. Create it from the template first.${NC}"
-    exit 1
-fi
-
-echo -e "\n${YELLOW}Step 2: Applying namespaces...${NC}"
-apply_file "$MANIFESTS_DIR/00-namespace/namespace.yaml"
-
 echo -e "\n${YELLOW}Step 3: Deploying shared PostgreSQL...${NC}"
 apply_file "$NEXTCLOUD_DIR/postgres-shared.yaml"
 apply_file "$NEXTCLOUD_DIR/nextcloud-pvcs.yaml"
