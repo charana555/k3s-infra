@@ -18,6 +18,10 @@ spec:
           labels:
             app: nextcloud-cron
         spec:
+          securityContext:
+            runAsUser: 33
+            runAsGroup: 33
+            fsGroup: 33
           restartPolicy: OnFailure
           containers:
           - name: nextcloud-cron

@@ -18,6 +18,24 @@ spec:
       labels:
         app: immich-microservices
     spec:
+      initContainers:
+      - name: wait-for-db
+        image: postgres:16-alpine
+        command:
+        - /bin/sh
+        - -c
+        - |
+          until pg_isready -h immich-postgres -p 5432 -U immich; do
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL is ready!"
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: immich-secrets
+              key: postgres-password
       containers:
       - name: immich-microservices
         image: ghcr.io/immich-app/immich-server:v2.6.3
