@@ -36,7 +36,7 @@ spec:
           mountPath: /var/lib/postgresql/data
       containers:
       - name: postgres
-        image: tensorchord/cloudnative-vectorchord:16.4-0.4.0
+        image: tensorchord/cloudnative-vectorchord:16-1.1.1
         ports:
         - containerPort: 5432
           protocol: TCP
