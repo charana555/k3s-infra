@@ -39,9 +39,6 @@ spec:
       containers:
       - name: immich-microservices
         image: ghcr.io/immich-app/immich-server:v2.6.3
-        command:
-        - /bin/sh
-        - ./start-microservices.sh
         env:
         - name: DB_HOSTNAME
           value: "immich-postgres"
@@ -62,6 +59,8 @@ spec:
           value: "6379"
         - name: IMMICH_MACHINE_LEARNING_URL
           value: ""
+        - name: IMMICH_WORKERS_INCLUDE
+          value: "microservices"
         resources:
           requests:
             memory: "256Mi"
