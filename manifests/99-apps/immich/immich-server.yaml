@@ -70,16 +70,14 @@ spec:
             memory: "1Gi"
             cpu: "1000m"
         livenessProbe:
-          httpGet:
-            path: /api/server-info/ping
+          tcpSocket:
             port: 2283
           initialDelaySeconds: 60
           periodSeconds: 30
           timeoutSeconds: 5
           failureThreshold: 3
         readinessProbe:
-          httpGet:
-            path: /api/server-info/ping
+          tcpSocket:
             port: 2283
           initialDelaySeconds: 30
           periodSeconds: 10
