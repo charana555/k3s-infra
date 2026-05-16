@@ -1,0 +1,56 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nextcloud-cron
+  namespace: nas
+  labels:
+    app: nextcloud-cron
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: nextcloud-cron
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: nextcloud-cron
+            image: nextcloud:30-apache
+            command:
+            - /bin/sh
+            - -c
+            - php /var/www/html/cron.php
+            env:
+            - name: POSTGRES_HOST
+              value: "postgres-shared"
+            - name: POSTGRES_DB
+              value: "nextcloud"
+            - name: POSTGRES_USER
+              value: "nextcloud"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-secrets
+                  key: db-password
+            - name: REDIS_HOST
+              value: "nextcloud-redis"
+            - name: REDIS_HOST_PORT
+              value: "6379"
+            volumeMounts:
+            - name: nextcloud-html
+              mountPath: /var/www/html
+            - name: nextcloud-data
+              mountPath: /var/www/data
+          volumes:
+          - name: nextcloud-html
+            persistentVolumeClaim:
+              claimName: nextcloud-html
+          - name: nextcloud-data
+            persistentVolumeClaim:
+              claimName: nextcloud-data

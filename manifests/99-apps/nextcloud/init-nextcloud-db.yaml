@@ -1,0 +1,37 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: init-nextcloud-db
+  namespace: nas
+  labels:
+    app: init-nextcloud-db
+spec:
+  template:
+    metadata:
+      labels:
+        app: init-nextcloud-db
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: init-db
+        image: postgres:16-alpine
+        command:
+        - /bin/sh
+        - -c
+        - |
+          psql -h postgres-shared -U postgres -c "SELECT 1 FROM pg_database WHERE datname='nextcloud'" | grep -q 1 || \
+          psql -h postgres-shared -U postgres -c "CREATE USER nextcloud WITH PASSWORD '${DB_PASSWORD}';" && \
+          psql -h postgres-shared -U postgres -c "CREATE DATABASE nextcloud OWNER nextcloud;" && \
+          psql -h postgres-shared -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE nextcloud TO nextcloud;"
+        env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nextcloud-secrets
+              key: db-password
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-shared-secrets
+              key: postgres-password
