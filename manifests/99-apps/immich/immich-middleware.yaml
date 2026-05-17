@@ -1,0 +1,9 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: immich-upload
+  namespace: nas
+spec:
+  buffering:
+    maxRequestBodyBytes: 524288000
+    memRequestBodyBytes: 104857600

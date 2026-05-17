@@ -61,7 +61,7 @@ spec:
         - name: REDIS_PORT
           value: "6379"
         - name: IMMICH_MACHINE_LEARNING_URL
-          value: ""
+          value: "http://immich-machine-learning:3003"
         resources:
           requests:
             memory: "256Mi"
@@ -115,6 +115,7 @@ metadata:
   namespace: nas
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: nas-immich-upload@kubernetescrd
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   tls:

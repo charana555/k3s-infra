@@ -58,7 +58,7 @@ spec:
         - name: REDIS_PORT
           value: "6379"
         - name: IMMICH_MACHINE_LEARNING_URL
-          value: ""
+          value: "http://immich-machine-learning:3003"
         - name: IMMICH_WORKERS_INCLUDE
           value: "microservices"
         resources:

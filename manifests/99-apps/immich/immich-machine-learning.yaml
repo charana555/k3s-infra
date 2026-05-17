@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: immich-machine-learning
+  namespace: nas
+  labels:
+    app: immich-machine-learning
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: immich-machine-learning
+  template:
+    metadata:
+      labels:
+        app: immich-machine-learning
+    spec:
+      containers:
+      - name: immich-machine-learning
+        image: ghcr.io/immich-app/immich-machine-learning:v2.6.3
+        env:
+        - name: DB_HOSTNAME
+          value: "immich-postgres"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USERNAME
+          value: "immich"
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: immich-secrets
+              key: postgres-password
+        - name: DB_DATABASE_NAME
+          value: "immich"
+        ports:
+        - containerPort: 3003
+          name: http
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        volumeMounts:
+        - name: model-cache
+          mountPath: /cache
+      volumes:
+      - name: model-cache
+        hostPath:
+          path: /mnt/data/immich-library/model-cache
+          type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: immich-machine-learning
+  namespace: nas
+  labels:
+    app: immich-machine-learning
+spec:
+  selector:
+    app: immich-machine-learning
+  ports:
+  - port: 3003
+    targetPort: 3003
+    protocol: TCP
+  type: ClusterIP
