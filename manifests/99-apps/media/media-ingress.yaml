@@ -13,6 +13,7 @@ spec:
       - prowlarr.charana.dev
       - torrent.charana.dev
       - sonarr.charana.dev
+      - plex.charana.dev
     secretName: media-dev-tls
   rules:
     - host: radarr.charana.dev
@@ -55,3 +56,13 @@ spec:
               name: sonarr
               port:
                 number: 8989
+    - host: plex.charana.dev
+      http:
+        paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: plex
+              port:
+                number: 32400

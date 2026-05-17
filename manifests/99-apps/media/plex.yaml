@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plex
+  namespace: media
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: plex
+  template:
+    metadata:
+      labels:
+        app: plex
+    spec:
+      containers:
+      - name: plex
+        image: lscr.io/linuxserver/plex:latest
+        env:
+        - name: PUID
+          value: "1000"
+        - name: PGID
+          value: "1000"
+        - name: TZ
+          value: "Etc/UTC"
+        - name: VERSION
+          value: docker
+        ports:
+        - containerPort: 32400
+          name: http
+        volumeMounts:
+        # Config state folder
+        - name: plex-config
+          mountPath: /config
+        # Nextcloud media folder mapped internally
+        - name: nextcloud-media
+          mountPath: /data/nextcloud
+          readOnly: true
+      volumes:
+      - name: plex-config
+        persistentVolumeClaim:
+          claimName: media-pvc
+      - name: nextcloud-media
+        hostPath:
+          # 🌟 PASTE YOUR EXACT OUTPUT PATH FROM STEP 1 HERE:
+          path: /var/lib/rancher/k3s/storage/pvc-8e78b3b0-e77f-4aca-b411-e6b776a0534a_nas_nextcloud-data
+          type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plex
+  namespace: media
+spec:
+  ports:
+  - port: 32400
+    targetPort: 32400
+  selector:
+    app: plex
