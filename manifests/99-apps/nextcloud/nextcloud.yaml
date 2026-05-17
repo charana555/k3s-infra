@@ -23,7 +23,7 @@ spec:
       initContainers:
       - name: fix-permissions
         image: busybox:1.36
-        command: ["sh", "-c", "chown -R 1000:1000 /var/www/data 2>/dev/null || true"]
+        command: ["sh", "-c", "chown -R 33:1000 /var/www/data && chmod -R u+rwx,g+rX,o-rwx /var/www/data 2>/dev/null || true"]
         volumeMounts:
         - name: nextcloud-data
           mountPath: /var/www/data
