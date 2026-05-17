@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: plex
+  name: jellyfin
   namespace: media
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: plex
+      app: jellyfin
   template:
     metadata:
       labels:
-        app: plex
+        app: jellyfin
     spec:
       containers:
-      - name: plex
-        image: lscr.io/linuxserver/plex:latest
+      - name: jellyfin
+        image: lscr.io/linuxserver/jellyfin:latest
         env:
         - name: PUID
           value: "1000"
@@ -23,17 +23,12 @@ spec:
           value: "1000"
         - name: TZ
           value: "Etc/UTC"
-        - name: VERSION
-          value: docker
         ports:
-        - containerPort: 32400
+        - containerPort: 8096
           name: http
         volumeMounts:
-        - name: plex-config
+        - name: jellyfin-config
           mountPath: /config
-        - name: nextcloud-data
-          mountPath: /data/nextcloud
-          readOnly: true
         - name: movies
           mountPath: /data/movies
           readOnly: true
@@ -43,18 +38,17 @@ spec:
         - name: downloads
           mountPath: /data/downloads
           readOnly: true
+        - name: nextcloud-data
+          mountPath: /data/nextcloud
+          readOnly: true
         - name: immich-library
           mountPath: /data/immich
           readOnly: true
       volumes:
-      - name: plex-config
+      - name: jellyfin-config
         hostPath:
-          path: /mnt/data/media/plex-config
+          path: /mnt/data/media/jellyfin-config
           type: DirectoryOrCreate
-      - name: nextcloud-data
-        hostPath:
-          path: /mnt/data/nextcloud-data
-          type: Directory
       - name: movies
         hostPath:
           path: /mnt/data/media/movies
@@ -67,6 +61,10 @@ spec:
         hostPath:
           path: /mnt/data/media/downloads
           type: DirectoryOrCreate
+      - name: nextcloud-data
+        hostPath:
+          path: /mnt/data/nextcloud-data
+          type: Directory
       - name: immich-library
         hostPath:
           path: /mnt/data/immich-library
@@ -75,11 +73,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: plex
+  name: jellyfin
   namespace: media
 spec:
   ports:
-  - port: 32400
-    targetPort: 32400
+  - port: 8096
+    targetPort: 8096
   selector:
-    app: plex
+    app: jellyfin

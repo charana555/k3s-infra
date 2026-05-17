@@ -19,7 +19,7 @@ spec:
             app: nextcloud-cron
         spec:
           securityContext:
-            runAsUser: 1000
+            runAsUser: 33
             runAsGroup: 1000
             fsGroup: 1000
           restartPolicy: OnFailure
