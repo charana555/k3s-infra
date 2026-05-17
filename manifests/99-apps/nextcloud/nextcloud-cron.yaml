@@ -19,9 +19,9 @@ spec:
             app: nextcloud-cron
         spec:
           securityContext:
-            runAsUser: 33
-            runAsGroup: 33
-            fsGroup: 33
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
           restartPolicy: OnFailure
           containers:
           - name: nextcloud-cron
@@ -56,5 +56,6 @@ spec:
             persistentVolumeClaim:
               claimName: nextcloud-html
           - name: nextcloud-data
-            persistentVolumeClaim:
-              claimName: nextcloud-data
+            hostPath:
+              path: /mnt/data/nextcloud-data
+              type: Directory

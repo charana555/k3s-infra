@@ -27,12 +27,13 @@ spec:
         - containerPort: 9696
           name: http
         volumeMounts:
-        - name: media-volume
-          mountPath: /data
+        - name: prowlarr-config
+          mountPath: /config
       volumes:
-      - name: media-volume
-        persistentVolumeClaim:
-          claimName: media-pvc
+      - name: prowlarr-config
+        hostPath:
+          path: /mnt/data/media/prowlarr-config
+          type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service

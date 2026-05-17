@@ -29,21 +29,47 @@ spec:
         - containerPort: 32400
           name: http
         volumeMounts:
-        # Config state folder
         - name: plex-config
           mountPath: /config
-        # Nextcloud media folder mapped internally
-        - name: nextcloud-media
+        - name: nextcloud-data
           mountPath: /data/nextcloud
+          readOnly: true
+        - name: movies
+          mountPath: /data/movies
+          readOnly: true
+        - name: tv
+          mountPath: /data/tv
+          readOnly: true
+        - name: downloads
+          mountPath: /data/downloads
+          readOnly: true
+        - name: immich-library
+          mountPath: /data/immich
           readOnly: true
       volumes:
       - name: plex-config
-        persistentVolumeClaim:
-          claimName: media-pvc
-      - name: nextcloud-media
         hostPath:
-          # 🌟 PASTE YOUR EXACT OUTPUT PATH FROM STEP 1 HERE:
-          path: /var/lib/rancher/k3s/storage/pvc-8e78b3b0-e77f-4aca-b411-e6b776a0534a_nas_nextcloud-data
+          path: /mnt/data/media/plex-config
+          type: DirectoryOrCreate
+      - name: nextcloud-data
+        hostPath:
+          path: /mnt/data/nextcloud-data
+          type: Directory
+      - name: movies
+        hostPath:
+          path: /mnt/data/media/movies
+          type: DirectoryOrCreate
+      - name: tv
+        hostPath:
+          path: /mnt/data/media/tv
+          type: DirectoryOrCreate
+      - name: downloads
+        hostPath:
+          path: /mnt/data/media/downloads
+          type: DirectoryOrCreate
+      - name: immich-library
+        hostPath:
+          path: /mnt/data/immich-library
           type: Directory
 ---
 apiVersion: v1

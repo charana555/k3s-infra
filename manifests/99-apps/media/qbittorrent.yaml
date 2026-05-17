@@ -29,12 +29,19 @@ spec:
         - containerPort: 8080
           name: http
         volumeMounts:
-        - name: media-volume
-          mountPath: /data # Mounts the whole root directory
+        - name: qbittorrent-config
+          mountPath: /config
+        - name: downloads
+          mountPath: /downloads
       volumes:
-      - name: media-volume
-        persistentVolumeClaim:
-          claimName: media-pvc
+      - name: qbittorrent-config
+        hostPath:
+          path: /mnt/data/media/qbittorrent-config
+          type: DirectoryOrCreate
+      - name: downloads
+        hostPath:
+          path: /mnt/data/media/downloads
+          type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service

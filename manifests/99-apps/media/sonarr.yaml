@@ -27,12 +27,25 @@ spec:
         - containerPort: 8989
           name: http
         volumeMounts:
-        - name: media-volume
-          mountPath: /data
+        - name: sonarr-config
+          mountPath: /config
+        - name: tv
+          mountPath: /tv
+        - name: downloads
+          mountPath: /downloads
       volumes:
-      - name: media-volume
-        persistentVolumeClaim:
-          claimName: media-pvc
+      - name: sonarr-config
+        hostPath:
+          path: /mnt/data/media/sonarr-config
+          type: DirectoryOrCreate
+      - name: tv
+        hostPath:
+          path: /mnt/data/media/tv
+          type: DirectoryOrCreate
+      - name: downloads
+        hostPath:
+          path: /mnt/data/media/downloads
+          type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service

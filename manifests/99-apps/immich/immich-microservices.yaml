@@ -73,5 +73,6 @@ spec:
           mountPath: /usr/src/app/upload
       volumes:
       - name: library
-        persistentVolumeClaim:
-          claimName: immich-library
+        hostPath:
+          path: /mnt/data/immich-library
+          type: Directory

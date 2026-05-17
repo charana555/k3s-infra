@@ -27,12 +27,25 @@ spec:
         - containerPort: 7878
           name: http
         volumeMounts:
-        - name: media-volume
-          mountPath: /data
+        - name: radarr-config
+          mountPath: /config
+        - name: movies
+          mountPath: /movies
+        - name: downloads
+          mountPath: /downloads
       volumes:
-      - name: media-volume
-        persistentVolumeClaim:
-          claimName: media-pvc
+      - name: radarr-config
+        hostPath:
+          path: /mnt/data/media/radarr-config
+          type: DirectoryOrCreate
+      - name: movies
+        hostPath:
+          path: /mnt/data/media/movies
+          type: DirectoryOrCreate
+      - name: downloads
+        hostPath:
+          path: /mnt/data/media/downloads
+          type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service
