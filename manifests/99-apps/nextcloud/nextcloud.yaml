@@ -102,6 +102,9 @@ spec:
           mountPath: /var/www/html
         - name: nextcloud-data
           mountPath: /var/www/data
+        - name: media-data
+          mountPath: /mnt/media
+          readOnly: true
       volumes:
       - name: nextcloud-html
         persistentVolumeClaim:
@@ -109,6 +112,10 @@ spec:
       - name: nextcloud-data
         hostPath:
           path: /mnt/data/nextcloud-data
+          type: Directory
+      - name: media-data
+        hostPath:
+          path: /mnt/data/media
           type: Directory
 ---
 apiVersion: v1
