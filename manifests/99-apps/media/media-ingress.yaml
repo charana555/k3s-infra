@@ -13,6 +13,7 @@ spec:
       - prowlarr.charana.dev
       - torrent.charana.dev
       - sonarr.charana.dev
+      - lidarr.charana.dev
       - media.charana.dev
     secretName: media-dev-tls
   rules:
@@ -56,6 +57,16 @@ spec:
               name: sonarr
               port:
                 number: 8989
+    - host: lidarr.charana.dev
+      http:
+        paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: lidarr
+              port:
+                number: 8686
     - host: media.charana.dev
       http:
         paths:
