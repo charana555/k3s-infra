@@ -13,8 +13,8 @@ data:
       copy: yes
       write: yes
       autotag: yes
-      quiet_fallback: skip
-      none_rec_action: skip
+      quiet_fallback: asis
+      none_rec_action: asis
       timid: no
 
     plugins:
