@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beets-config
+  namespace: media
+data:
+  config.yaml: |
+    directory: /beets-library
+    library: /config/beets.db
+
+    import:
+      move: no
+      copy: yes
+      write: yes
+      autotag: yes
+      quiet_fallback: skip
+      none_rec_action: skip
+      timid: no
+
+    plugins:
+      - chroma
+      - duplicates
+      - fetchart
+      - embedart
+      - lastgenre
+      - scrub
+      - mbsync
+
+    chroma:
+      auto: yes
+
+    duplicates:
+      checksum: acoustid_fingerprint
+      count: true
+      album: no
+      merge: no
+      move: no
+      tag: duplicate
+
+    fetchart:
+      cautious: true
+      minwidth: 300
+      maxwidth: 1000
+      enforce_ratio: yes
+
+    lastgenre:
+      auto: yes
+      count: 2
+      fallback: ""
+
+    scrub:
+      auto: yes
+
+    paths:
+      default: $albumartist/$album%aunique{}/$track $title
+      singleton: Non-Album/$artist/$track $title
+      comp: Compilations/$album%aunique{}/$track $title

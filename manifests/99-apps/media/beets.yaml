@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: beets
+  namespace: media
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: beets
+  template:
+    metadata:
+      labels:
+        app: beets
+    spec:
+      containers:
+      - name: beets
+        image: lscr.io/linuxserver/beets:latest
+        env:
+        - name: PUID
+          value: "1000"
+        - name: PGID
+          value: "1000"
+        - name: TZ
+          value: "Etc/UTC"
+        ports:
+        - containerPort: 8337
+          name: http
+        volumeMounts:
+        - name: beets-config
+          mountPath: /config
+        - name: beets-config-yaml
+          mountPath: /config/config.yaml
+          subPath: config.yaml
+          readOnly: true
+        - name: music
+          mountPath: /music
+          readOnly: true
+        - name: beets-library
+          mountPath: /beets-library
+        - name: downloads
+          mountPath: /downloads
+          readOnly: true
+      volumes:
+      - name: beets-config
+        hostPath:
+          path: /mnt/data/media/beets-config
+          type: DirectoryOrCreate
+      - name: beets-config-yaml
+        configMap:
+          name: beets-config
+      - name: music
+        hostPath:
+          path: /mnt/data/media/music
+          type: DirectoryOrCreate
+      - name: beets-library
+        hostPath:
+          path: /mnt/data/media/beets-library
+          type: DirectoryOrCreate
+      - name: downloads
+        hostPath:
+          path: /mnt/data/media/downloads
+          type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: beets
+  namespace: media
+spec:
+  ports:
+  - port: 8337
+    targetPort: 8337
+  selector:
+    app: beets
