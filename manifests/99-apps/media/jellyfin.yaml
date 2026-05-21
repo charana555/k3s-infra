@@ -44,6 +44,9 @@ spec:
         - name: immich-library
           mountPath: /data/immich
           readOnly: true
+        - name: music
+          mountPath: /data/music
+          readOnly: true
       volumes:
       - name: jellyfin-config
         hostPath:
@@ -56,6 +59,10 @@ spec:
       - name: tv
         hostPath:
           path: /mnt/data/media/tv
+          type: DirectoryOrCreate
+      - name: music
+        hostPath:
+          path: /mnt/data/media/beets-library
           type: DirectoryOrCreate
       - name: downloads
         hostPath:
