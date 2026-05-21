@@ -33,8 +33,6 @@ data:
       checksum: acoustid_fingerprint
       count: true
       album: no
-      merge: no
-      move: no
       tag: duplicate
 
     fetchart:
