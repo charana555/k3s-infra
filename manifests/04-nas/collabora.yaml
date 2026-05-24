@@ -1,0 +1,107 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collabora
+  namespace: nas
+  labels:
+    app: collabora
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: collabora
+  template:
+    metadata:
+      labels:
+        app: collabora
+    spec:
+      containers:
+      - name: collabora
+        image: collabora/code:latest
+        ports:
+        - containerPort: 9980
+          protocol: TCP
+        env:
+        - name: aliasgroup1
+          value: "https://cloud.charana.dev:443"
+        - name: extra_params
+          value: "--o:ssl.enable=false --o:ssl.termination=true"
+        - name: dictionaries
+          value: "en"
+        - name: username
+          valueFrom:
+            secretKeyRef:
+              name: collabora-admin-secret
+              key: username
+        - name: password
+          valueFrom:
+            secretKeyRef:
+              name: collabora-admin-secret
+              key: password
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /hosting/discovery
+            port: 9980
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /hosting/discovery
+            port: 9980
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: collabora
+  namespace: nas
+  labels:
+    app: collabora
+spec:
+  selector:
+    app: collabora
+  ports:
+  - port: 80
+    targetPort: 9980
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: collabora
+  namespace: nas
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - office.charana.dev
+    secretName: office-charana-dev-tls
+  rules:
+  - host: office.charana.dev
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: collabora
+            port:
+              number: 80

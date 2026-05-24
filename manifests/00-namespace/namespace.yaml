@@ -30,3 +30,11 @@ metadata:
   labels:
     environment: apps
     managed-by: k3s-infra
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nas
+  labels:
+    environment: nas
+    managed-by: k3s-infra
