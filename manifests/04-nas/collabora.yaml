@@ -1,4 +1,26 @@
 ---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: collabora-headers
+  namespace: nas
+spec:
+  headers:
+    customRequestHeaders:
+      X-Forwarded-Proto: "https"
+    accessControlAllowMethods:
+      - "GET"
+      - "OPTIONS"
+      - "PUT"
+      - "POST"
+    accessControlAllowOriginList:
+      - "https://cloud.charana.dev"
+    accessControlMaxAge: 100
+    accessControlAllowHeaders:
+      - "Authorization"
+      - "Content-Type"
+      - "X-Requested-With"
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -27,8 +49,10 @@ spec:
         env:
         - name: aliasgroup1
           value: "https://cloud.charana.dev:443"
+        - name: server_name
+          value: "office.charana.dev"
         - name: extra_params
-          value: "--o:ssl.enable=false --o:ssl.termination=true"
+          value: "--o:ssl.enable=false --o:ssl.termination=true --o:net.frame_ancestors=cloud.charana.dev"
         - name: dictionaries
           value: "en"
         - name: username
@@ -43,27 +67,27 @@ spec:
               key: password
         resources:
           requests:
-            memory: "256Mi"
+            memory: "512Mi"
             cpu: "250m"
           limits:
-            memory: "512Mi"
-            cpu: "500m"
+            memory: "1Gi"
+            cpu: "1000m"
         livenessProbe:
           httpGet:
-            path: /hosting/discovery
+            path: /hosting/capabilities
             port: 9980
-          initialDelaySeconds: 30
+          initialDelaySeconds: 60
           periodSeconds: 30
           timeoutSeconds: 10
-          failureThreshold: 3
+          failureThreshold: 6
         readinessProbe:
           httpGet:
-            path: /hosting/discovery
+            path: /hosting/capabilities
             port: 9980
-          initialDelaySeconds: 15
+          initialDelaySeconds: 60
           periodSeconds: 10
           timeoutSeconds: 5
-          failureThreshold: 3
+          failureThreshold: 6
 ---
 apiVersion: v1
 kind: Service
@@ -88,6 +112,7 @@ metadata:
   namespace: nas
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: nas-collabora-headers@kubernetescrd
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   tls:
