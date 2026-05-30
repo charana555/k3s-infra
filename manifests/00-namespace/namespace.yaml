@@ -38,3 +38,11 @@ metadata:
   labels:
     environment: nas
     managed-by: k3s-infra
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: llm
+  labels:
+    environment: llm
+    managed-by: k3s-infra
