@@ -1,13 +1,4 @@
 ---
-apiVersion: traefik.io/v1alpha1
-kind: Middleware
-metadata:
-  name: llm-basic-auth
-  namespace: llm
-spec:
-  basicAuth:
-    secret: llm-basic-auth
----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -105,7 +96,6 @@ metadata:
   namespace: llm
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
-    traefik.ingress.kubernetes.io/router.middlewares: llm-llm-basic-auth@kubernetescrd
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   tls:
