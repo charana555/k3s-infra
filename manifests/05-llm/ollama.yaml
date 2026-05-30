@@ -33,6 +33,11 @@ spec:
     spec:
       nodeSelector:
         workload: llm
+      tolerations:
+      - key: dedicated
+        operator: Equal
+        value: llm
+        effect: NoSchedule
       dnsPolicy: None
       dnsConfig:
         nameservers:
