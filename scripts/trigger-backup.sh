@@ -59,8 +59,8 @@ trigger_etcd_backup() {
     # Create unique job name with timestamp
     JOB_NAME="etcd-backup-manual-$(date +%s)"
     
-    # Create job from template
-    cat <<EOF | kubectl apply -f -
+    # Create job from template (quoted heredoc prevents local variable expansion)
+    cat <<'EOF' | kubectl apply -f -
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -144,8 +144,8 @@ trigger_pv_backup() {
     # Create unique job name with timestamp
     JOB_NAME="pv-backup-manual-$(date +%s)"
     
-    # Create job from template
-    cat <<EOF | kubectl apply -f -
+    # Create job from template (quoted heredoc prevents local variable expansion)
+    cat <<'EOF' | kubectl apply -f -
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -177,9 +177,9 @@ spec:
           
           # Create backup
           TIMESTAMP=$(date +%Y%m%d)
-          echo "Starting backup at \$(date)"
+          echo "Starting backup at $(date)"
           restic -r /backup/restic backup \
-            --tag \${TIMESTAMP} \
+            --tag ${TIMESTAMP} \
             --exclude-if-present .nobackup \
             /data
           
