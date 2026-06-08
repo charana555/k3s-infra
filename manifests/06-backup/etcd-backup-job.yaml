@@ -1,0 +1,42 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: etcd-snapshot-backup
+  namespace: backup
+spec:
+  template:
+    spec:
+      nodeSelector:
+        workload: backup
+      tolerations:
+      - key: dedicated
+        operator: Equal
+        value: backup
+        effect: NoSchedule
+      containers:
+      - name: etcd-backup
+        image: rancher/k3s:v1.30.5-k3s1
+        command:
+        - /bin/sh
+        - -c
+        - |
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          k3s etcd-snapshot save --etcd-snapshot-dir=/backup/etcd --name=${TIMESTAMP}
+          echo "Backup completed: ${TIMESTAMP}"
+        volumeMounts:
+        - name: backup-storage
+          mountPath: /backup
+        - name: k3s-server
+          mountPath: /var/lib/rancher/k3s/server
+          readOnly: true
+      volumes:
+      - name: backup-storage
+        hostPath:
+          path: /mnt/backup
+          type: DirectoryOrCreate
+      - name: k3s-server
+        hostPath:
+          path: /var/lib/rancher/k3s/server
+          type: Directory
+      restartPolicy: OnFailure

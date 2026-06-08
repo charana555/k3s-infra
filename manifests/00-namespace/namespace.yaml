@@ -46,3 +46,11 @@ metadata:
   labels:
     environment: llm
     managed-by: k3s-infra
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: backup
+  labels:
+    environment: system
+    managed-by: k3s-infra

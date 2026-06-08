@@ -1,0 +1,66 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pv-restic-backup
+  namespace: backup
+spec:
+  template:
+    spec:
+      nodeSelector:
+        workload: backup
+      tolerations:
+      - key: dedicated
+        operator: Equal
+        value: backup
+        effect: NoSchedule
+      containers:
+      - name: restic-backup
+        image: restic/restic:0.16.4
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Initialize repository if needed
+          if ! restic -r /backup/restic snapshots > /dev/null 2>&1; then
+            echo "Initializing restic repository..."
+            restic -r /backup/restic init
+          fi
+          
+          # Create backup
+          TIMESTAMP=$(date +%Y%m%d)
+          echo "Starting backup at $(date)"
+          restic -r /backup/restic backup \
+            --tag ${TIMESTAMP} \
+            --exclude-if-present .nobackup \
+            /data
+          
+          echo "Pruning old snapshots..."
+          restic -r /backup/restic forget \
+            --keep-daily 30 \
+            --keep-weekly 12 \
+            --keep-monthly 12 \
+            --prune
+          
+          echo "Backup completed successfully"
+        env:
+        - name: RESTIC_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: restic-password
+              key: password
+        volumeMounts:
+        - name: backup-storage
+          mountPath: /backup
+        - name: pv-data
+          mountPath: /data
+      volumes:
+      - name: backup-storage
+        hostPath:
+          path: /mnt/backup
+          type: DirectoryOrCreate
+      - name: pv-data
+        hostPath:
+          path: /var/lib/rancher/k3s/storage
+          type: DirectoryOrCreate
+      restartPolicy: OnFailure
