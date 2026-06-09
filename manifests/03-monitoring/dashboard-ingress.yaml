@@ -27,11 +27,6 @@ spec:
   routes:
     - match: Host(`k8s.charana.dev`)
       kind: Rule
-      middlewares:
-        - name: dashboard-auth
-          namespace: kubernetes-dashboard
-        - name: strip-auth-header
-          namespace: kubernetes-dashboard
       services:
         - name: kubernetes-dashboard
           port: 443

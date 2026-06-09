@@ -1,20 +1,3 @@
-apiVersion: v1
-kind: Secret
-metadata:
-  name: dashboard-auth-secret
-  namespace: kubernetes-dashboard
-type: Opaque
-stringData:
-  users: "admin:$apr1$.yQ0vZQU$KY/HBLm0YtOWmgpSP3vgJ/"
----
-apiVersion: traefik.io/v1alpha1
-kind: Middleware
-metadata:
-  name: dashboard-auth
-  namespace: kubernetes-dashboard
-spec:
-  basicAuth:
-    secret: dashboard-auth-secret
 ---
 apiVersion: traefik.io/v1alpha1
 kind: ServersTransport
@@ -33,13 +16,3 @@ spec:
   redirectScheme:
     scheme: https
     permanent: true
----
-apiVersion: traefik.io/v1alpha1
-kind: Middleware
-metadata:
-  name: strip-auth-header
-  namespace: kubernetes-dashboard
-spec:
-  headers:
-    customRequestHeaders:
-      Authorization: ""
