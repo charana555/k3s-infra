@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sonarr
+  namespace: media
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sonarr
+  template:
+    metadata:
+      labels:
+        app: sonarr
+    spec:
+      containers:
+      - name: sonarr
+        image: lscr.io/linuxserver/sonarr:latest
+        env:
+        - name: PUID
+          value: "1000"
+        - name: PGID
+          value: "1000"
+        - name: TZ
+          value: "Etc/UTC"
+        ports:
+        - containerPort: 8989
+          name: http
+        volumeMounts:
+        - name: sonarr-config
+          mountPath: /config
+        - name: tv
+          mountPath: /tv
+        - name: downloads
+          mountPath: /downloads
+      volumes:
+      - name: sonarr-config
+        hostPath:
+          path: /mnt/data/media/sonarr-config
+          type: DirectoryOrCreate
+      - name: tv
+        hostPath:
+          path: /mnt/data/media/tv
+          type: DirectoryOrCreate
+      - name: downloads
+        hostPath:
+          path: /mnt/data/media/downloads
+          type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sonarr
+  namespace: media
+spec:
+  ports:
+  - port: 8989
+    targetPort: 8989
+  selector:
+    app: sonarr

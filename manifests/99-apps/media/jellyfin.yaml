@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyfin
+  namespace: media
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jellyfin
+  template:
+    metadata:
+      labels:
+        app: jellyfin
+    spec:
+      containers:
+      - name: jellyfin
+        image: lscr.io/linuxserver/jellyfin:latest
+        env:
+        - name: PUID
+          value: "1000"
+        - name: PGID
+          value: "1000"
+        - name: TZ
+          value: "Etc/UTC"
+        ports:
+        - containerPort: 8096
+          name: http
+        volumeMounts:
+        - name: jellyfin-config
+          mountPath: /config
+        - name: movies
+          mountPath: /data/movies
+          readOnly: true
+        - name: tv
+          mountPath: /data/tv
+          readOnly: true
+        - name: downloads
+          mountPath: /data/downloads
+          readOnly: true
+        - name: nextcloud-data
+          mountPath: /data/nextcloud
+          readOnly: true
+        - name: immich-library
+          mountPath: /data/immich
+          readOnly: true
+        - name: music
+          mountPath: /data/music
+          readOnly: true
+      volumes:
+      - name: jellyfin-config
+        hostPath:
+          path: /mnt/data/media/jellyfin-config
+          type: DirectoryOrCreate
+      - name: movies
+        hostPath:
+          path: /mnt/data/media/movies
+          type: DirectoryOrCreate
+      - name: tv
+        hostPath:
+          path: /mnt/data/media/tv
+          type: DirectoryOrCreate
+      - name: music
+        hostPath:
+          path: /mnt/data/media/beets-library
+          type: DirectoryOrCreate
+      - name: downloads
+        hostPath:
+          path: /mnt/data/media/downloads
+          type: DirectoryOrCreate
+      - name: nextcloud-data
+        hostPath:
+          path: /mnt/data/nextcloud-data
+          type: Directory
+      - name: immich-library
+        hostPath:
+          path: /mnt/data/immich-library
+          type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jellyfin
+  namespace: media
+spec:
+  ports:
+  - port: 8096
+    targetPort: 8096
+  selector:
+    app: jellyfin

@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: radarr
+  namespace: media
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: radarr
+  template:
+    metadata:
+      labels:
+        app: radarr
+    spec:
+      containers:
+      - name: radarr
+        image: lscr.io/linuxserver/radarr:latest
+        env:
+        - name: PUID
+          value: "1000"
+        - name: PGID
+          value: "1000"
+        - name: TZ
+          value: "Etc/UTC"
+        ports:
+        - containerPort: 7878
+          name: http
+        volumeMounts:
+        - name: radarr-config
+          mountPath: /config
+        - name: movies
+          mountPath: /movies
+        - name: downloads
+          mountPath: /downloads
+      volumes:
+      - name: radarr-config
+        hostPath:
+          path: /mnt/data/media/radarr-config
+          type: DirectoryOrCreate
+      - name: movies
+        hostPath:
+          path: /mnt/data/media/movies
+          type: DirectoryOrCreate
+      - name: downloads
+        hostPath:
+          path: /mnt/data/media/downloads
+          type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: radarr
+  namespace: media
+spec:
+  ports:
+  - port: 7878
+    targetPort: 7878
+  selector:
+    app: radarr

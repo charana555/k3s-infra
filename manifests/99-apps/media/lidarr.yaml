@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lidarr
+  namespace: media
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lidarr
+  template:
+    metadata:
+      labels:
+        app: lidarr
+    spec:
+      containers:
+      - name: lidarr
+        image: lscr.io/linuxserver/lidarr:latest
+        env:
+        - name: PUID
+          value: "1000"
+        - name: PGID
+          value: "1000"
+        - name: TZ
+          value: "Etc/UTC"
+        ports:
+        - containerPort: 8686
+          name: http
+        volumeMounts:
+        - name: lidarr-config
+          mountPath: /config
+        - name: music
+          mountPath: /music
+        - name: downloads
+          mountPath: /downloads
+      volumes:
+      - name: lidarr-config
+        hostPath:
+          path: /mnt/data/media/lidarr-config
+          type: DirectoryOrCreate
+      - name: music
+        hostPath:
+          path: /mnt/data/media/music
+          type: DirectoryOrCreate
+      - name: downloads
+        hostPath:
+          path: /mnt/data/media/downloads
+          type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lidarr
+  namespace: media
+spec:
+  ports:
+  - port: 8686
+    targetPort: 8686
+  selector:
+    app: lidarr

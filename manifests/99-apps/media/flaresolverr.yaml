@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flaresolverr
+  namespace: media
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flaresolverr
+  template:
+    metadata:
+      labels:
+        app: flaresolverr
+    spec:
+      containers:
+      - name: flaresolverr
+        image: ghcr.io/flaresolverr/flaresolverr:latest
+        env:
+        - name: PUID
+          value: "1000"
+        - name: PGID
+          value: "1000"
+        - name: TZ
+          value: "Etc/UTC"
+        ports:
+        - containerPort: 8191
+          name: http
+        volumeMounts:
+        - name: flaresolverr-config
+          mountPath: /config
+      volumes:
+      - name: flaresolverr-config
+        hostPath:
+          path: /mnt/data/media/flaresolverr-config
+          type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flaresolverr
+  namespace: media
+spec:
+  ports:
+  - port: 8191
+    targetPort: 8191
+  selector:
+    app: flaresolverr
