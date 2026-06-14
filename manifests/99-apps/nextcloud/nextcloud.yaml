@@ -18,6 +18,8 @@ spec:
       labels:
         app: nextcloud
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: charana-vps
       securityContext:
         fsGroup: 1000
       initContainers:
@@ -114,9 +116,8 @@ spec:
           path: /mnt/data/nextcloud-data
           type: Directory
       - name: media-data
-        hostPath:
-          path: /mnt/data/media
-          type: Directory
+        persistentVolumeClaim:
+          claimName: media-nfs-pvc
 ---
 apiVersion: v1
 kind: Service

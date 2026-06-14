@@ -18,6 +18,8 @@ spec:
       labels:
         app: immich-server
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: charana-vps
       initContainers:
       - name: wait-for-db
         image: postgres:16-alpine

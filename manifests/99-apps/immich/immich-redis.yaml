@@ -16,6 +16,8 @@ spec:
       labels:
         app: immich-redis
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: charana-vps
       containers:
       - name: redis
         image: redis:7-alpine

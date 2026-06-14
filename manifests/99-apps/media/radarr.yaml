@@ -13,6 +13,8 @@ spec:
       labels:
         app: radarr
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: pavan-vps
       containers:
       - name: radarr
         image: lscr.io/linuxserver/radarr:latest

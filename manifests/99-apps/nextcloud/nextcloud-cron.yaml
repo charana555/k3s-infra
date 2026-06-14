@@ -18,6 +18,8 @@ spec:
           labels:
             app: nextcloud-cron
         spec:
+          nodeSelector:
+            kubernetes.io/hostname: charana-vps
           securityContext:
             runAsUser: 33
             runAsGroup: 1000

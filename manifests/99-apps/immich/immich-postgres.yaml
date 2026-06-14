@@ -17,6 +17,8 @@ spec:
       labels:
         app: immich-postgres
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: charana-vps
       securityContext:
         fsGroup: 999
       containers:

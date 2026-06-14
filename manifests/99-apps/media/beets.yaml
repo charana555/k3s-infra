@@ -13,6 +13,8 @@ spec:
       labels:
         app: beets
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: pavan-vps
       containers:
       - name: beets
         image: lscr.io/linuxserver/beets:latest

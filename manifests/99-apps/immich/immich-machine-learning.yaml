@@ -17,6 +17,8 @@ spec:
       labels:
         app: immich-machine-learning
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: charana-vps
       containers:
       - name: immich-machine-learning
         image: ghcr.io/immich-app/immich-machine-learning:v2.6.3

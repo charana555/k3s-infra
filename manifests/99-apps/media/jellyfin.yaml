@@ -13,6 +13,8 @@ spec:
       labels:
         app: jellyfin
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: pavan-vps
       containers:
       - name: jellyfin
         image: lscr.io/linuxserver/jellyfin:latest
