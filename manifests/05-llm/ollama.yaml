@@ -58,9 +58,11 @@ spec:
           value: "0.0.0.0:11434"
         resources:
           requests:
+            nvidia.com/gpu: 1
             cpu: "2"
             memory: "8Gi"
           limits:
+            nvidia.com/gpu: 1
             cpu: "4"
             memory: "16Gi"
         volumeMounts:
