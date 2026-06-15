@@ -36,7 +36,7 @@ spec:
       containers:
       - name: hermes-agent
         image: nousresearch/hermes-agent:latest
-        command: ["sleep", "infinity"]
+        args: ["sleep", "infinity"]
         ports:
         - containerPort: 9119
           name: dashboard
