@@ -262,7 +262,7 @@ def index_cluster():
     cluster_index = {}
     resource_types = discover_resource_types()
 
-    # Blacklist platform / infrastructure types that are never declaratively managed
+    # Blacklist: infrastructure types never managed declaratively
     blacklist = {
         "secrets",
         "events",
@@ -291,11 +291,67 @@ def index_cluster():
         "subjectaccessreviews.authorization.k8s.io",
         "podtemplates",
         "controllerrevisions.apps",
-        # ReplicationControllers are usually generated or legacy
         "replicationcontrollers",
+        # Additional infrastructure types
+        "customresourcedefinitions.apiextensions.k8s.io",
+        "customresourcedefinitions",
+        "helmcharts.helm.cattle.io",
+        "helmcharts",
+        "addons.k3s.cattle.io",
+        "addons",
+        "ipaddresses.k8s.io",
+        "ipaddresses",
+        "servicecidrs.k8s.io",
+        "servicecidrs",
+        "nodemetrics.metrics.k8s.io",
+        "nodemetrics",
+        "podmetrics.metrics.k8s.io",
+        "podmetrics",
+        "certificaterequests.cert-manager.io",
+        "certificaterequests",
+        "orders.acme.cert-manager.io",
+        "orders",
+        "challenges.acme.cert-manager.io",
+        "challenges",
+        "replicasets.apps",
+        "replicasets",
+        "ingressclasses.networking.k8s.io",
+        "ingressclasses",
+        "gatewayclasses.gateway.networking.k8s.io",
+        "gatewayclasses",
+        "gateways.gateway.networking.k8s.io",
+        "gateways",
+        "grpcroutes.gateway.networking.k8s.io",
+        "grpcroutes",
+        "httproutes.gateway.networking.k8s.io",
+        "httproutes",
+        "referencegrants.gateway.networking.k8s.io",
+        "referencegrants",
+        "backendtlspolicies.gateway.networking.k8s.io",
+        "backendtlspolicies",
+        "etcdsnapshotfiles.k3s.cattle.io",
+        "helmchartconfigs.helm.cattle.io",
+        "helmchartconfigs",
     }
 
-    skipped_kinds = set()
+    # Known k3s system components to skip (allow custom ones through)
+    kube_system_whitelist_noise = {
+        "coredns",
+        "local-path-provisioner",
+        "metrics-server",
+        "traefik",
+        "svclb-traefik",
+        "addon",
+        "helm-install",
+        "chart-content",
+        "cluster-dns",
+        "extension-apiserver-authentication",
+        "kube-apiserver-legacy-service-account-token-tracking",
+        "local-path-config",
+        "cert-manager",
+        "cert-manager-cainjector",
+        "cert-manager-webhook",
+    }
 
     for scope, api_name in resource_types:
         if api_name in blacklist:
@@ -307,16 +363,55 @@ def index_cluster():
             if kind in ("Secret", "Event", "List") or not kind:
                 continue
 
-            ns = item.get("metadata", {}).get("namespace", "")
-            name = item.get("metadata", {}).get("name", "")
+            meta = item.get("metadata", {})
+            ns = meta.get("namespace", "")
+            name = meta.get("name", "")
             if not name:
                 continue
 
-            # Skip pods that are owned by a controller (they're ephemeral)
-            if kind == "Pod":
-                owner_refs = item.get("metadata", {}).get("ownerReferences", [])
-                if any(ref.get("controller", False) for ref in owner_refs):
+            # Skip resources owned by a controller (children)
+            owner_refs = meta.get("ownerReferences", [])
+            if any(ref.get("controller", False) for ref in owner_refs):
+                continue
+
+            # Skip auto-generated per-namespace resources
+            if kind == "ConfigMap" and name == "kube-root-ca.crt":
+                continue
+            if kind == "ServiceAccount" and name == "default":
+                continue
+
+            # Skip by name patterns
+            if name.startswith("system:") or name.startswith("helm-"):
+                continue
+            if kind == "ConfigMap" and name.startswith("chart-content-"):
+                continue
+
+            # Skip openclaw resources entirely
+            if "openclaw" in name.lower():
+                continue
+
+            # Smart kube-system filtering: skip known noise, keep unknown/custom
+            if ns == "kube-system":
+                is_known_noise = any(
+                    name.startswith(prefix) or prefix in name
+                    for prefix in kube_system_whitelist_noise
+                )
+                if is_known_noise:
                     continue
+
+            # Skip system-generated platform RBAC (cluster-scoped)
+            if ns == "" and kind in ("ClusterRole", "ClusterRoleBinding"):
+                # Keep custom ones, skip built-in system roles
+                if name.startswith("system:") or name in (
+                    "admin", "edit", "view", "cluster-admin",
+                    "traefik-kube-system", "k3s-cloud-controller-manager",
+                    "local-path-provisioner-role", "clustercidrs-node",
+                ):
+                    continue
+
+            # Skip PriorityClasses (platform-level)
+            if kind == "PriorityClass":
+                continue
 
             key = (kind, ns, name)
             cluster_index[key] = normalize(item)

@@ -30,7 +30,8 @@ spec:
       - name: ghcr-credentials
       containers:
       - name: portfolio-v2
-        image: ghcr.io/charana555/portfolio_v2:5a547148917f@sha256:6bcf5218d172d89106d96453a9aeabee6cb20444563821b3e24b04c2ff84e94b
+        image: ghcr.io/charana555/portfolio_v2:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 3000
           protocol: TCP
