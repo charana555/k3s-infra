@@ -86,6 +86,11 @@ spec:
             secretKeyRef:
               name: hermes-secrets
               key: discord-home-channel-name
+        - name: DISCORD_ALLOWED_USERS    
+          valueFrom:
+            secretKeyRef:
+              name: hermes-secrets
+              key: discord-user-ide
         resources:
           requests:
             memory: "512Mi"
