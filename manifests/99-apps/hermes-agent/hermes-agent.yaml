@@ -90,7 +90,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: hermes-secrets
-              key: discord-user-ide
+              key: discord-user-id
         resources:
           requests:
             memory: "512Mi"
