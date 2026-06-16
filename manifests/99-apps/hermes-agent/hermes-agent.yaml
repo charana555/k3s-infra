@@ -59,18 +59,33 @@ spec:
         - name: OPENAI_API_KEY
           valueFrom:
             secretKeyRef:
-              name: hermes-juspay-api-key
+              name: hermes-secrets
               key: api-key
         - name: TELEGRAM_BOT_TOKEN
           valueFrom:
             secretKeyRef:
-              name: hermes-telegram
+              name: hermes-secrets
               key: bot-token
         - name: TELEGRAM_ALLOWED_USERS
           valueFrom:
             secretKeyRef:
-              name: hermes-telegram
+              name: hermes-secrets
               key: allowed-users
+        - name: DISCORD_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hermes-secrets
+              key: discord-bot-token
+        - name: DISCORD_HOME_CHANNEL
+          valueFrom:
+            secretKeyRef:
+              name: hermes-secrets
+              key: discord-home-channel
+        - name: DISCORD_HOME_CHANNEL_NAME
+          valueFrom:
+            secretKeyRef:
+              name: hermes-secrets
+              key: discord-home-channel-name
         resources:
           requests:
             memory: "512Mi"
