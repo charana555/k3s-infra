@@ -45,11 +45,6 @@ spec:
           value: "45876"
         - name: HUB_URL
           value: "http://beszel-hub.monitoring.svc.cluster.local:8090"
-        - name: KEY
-          valueFrom:
-            secretKeyRef:
-              name: beszel-secrets
-              key: key
         - name: TOKEN
           valueFrom:
             secretKeyRef:
@@ -58,6 +53,9 @@ spec:
         # k3s uses containerd, not Docker - disable Docker stats to avoid errors
         - name: DOCKER_HOST
           value: ""
+        # WebSocket-only mode - disable SSH server (no KEY needed)
+        - name: DISABLE_SSH
+          value: "true"
         # Enable NVML GPU monitoring (graceful no-op on non-GPU nodes)
         - name: NVML
           value: "true"
