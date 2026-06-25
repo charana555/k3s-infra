@@ -20,6 +20,7 @@ spec:
         app: beszel-agent
     spec:
       hostNetwork: true
+      dnsPolicy: ClusterFirstWithClusterNet
       tolerations:
         - effect: NoSchedule
           key: node-role.kubernetes.io/master
