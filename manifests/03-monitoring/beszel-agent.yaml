@@ -1,0 +1,94 @@
+---
+# Beszel Agent - DaemonSet that runs on every node
+# Reports host-level metrics (CPU, memory, disk, temp, GPU, SMART) to the Hub
+# Docs: https://beszel.dev/guide/advanced-deployment#kubernetes
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: beszel-agent
+  namespace: monitoring
+  labels:
+    app: beszel-agent
+spec:
+  selector:
+    matchLabels:
+      app: beszel-agent
+  template:
+    metadata:
+      labels:
+        app: beszel-agent
+    spec:
+      hostNetwork: true
+      tolerations:
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/master
+          operator: Exists
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/control-plane
+          operator: Exists
+        - effect: NoSchedule
+          key: dedicated
+          operator: Equal
+          value: llm
+      containers:
+      - name: beszel-agent
+        image: henrygd/beszel-agent:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 45876
+          hostPort: 45876
+          protocol: TCP
+        env:
+        - name: LISTEN
+          value: "45876"
+        - name: HUB_URL
+          value: "http://beszel-hub.monitoring.svc.cluster.local:8090"
+        - name: KEY
+          valueFrom:
+            secretKeyRef:
+              name: beszel-secrets
+              key: key
+        - name: TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: beszel-secrets
+              key: token
+        # k3s uses containerd, not Docker - disable Docker stats to avoid errors
+        - name: DOCKER_HOST
+          value: ""
+        # Enable NVML GPU monitoring (graceful no-op on non-GPU nodes)
+        - name: NVML
+          value: "true"
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "25m"
+          limits:
+            memory: "128Mi"
+            cpu: "250m"
+        volumeMounts:
+        - name: beszel-agent-data
+          mountPath: /var/lib/beszel-agent
+        livenessProbe:
+          tcpSocket:
+            port: 45876
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 45876
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: beszel-agent-data
+        emptyDir: {}
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1

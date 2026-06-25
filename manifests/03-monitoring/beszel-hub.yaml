@@ -1,0 +1,171 @@
+---
+# Beszel Hub - Lightweight server monitoring platform
+# Web UI, alert management, and agent coordinator
+# Docs: https://beszel.dev/guide/hub-installation
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: beszel-hub-data
+  namespace: monitoring
+  labels:
+    app: beszel-hub
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: beszel-hub
+  namespace: monitoring
+  labels:
+    app: beszel-hub
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: beszel-hub
+  template:
+    metadata:
+      labels:
+        app: beszel-hub
+    spec:
+      nodeSelector:
+        workload: monitoring
+      containers:
+      - name: beszel-hub
+        image: henrygd/beszel:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8090
+          name: http
+          protocol: TCP
+        env:
+        - name: APP_URL
+          value: "https://beszel.charana.dev"
+        - name: USER_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: beszel-secrets
+              key: admin-email
+        - name: USER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: beszel-secrets
+              key: admin-password
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: beszel-data
+          mountPath: /beszel_data
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8090
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8090
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: beszel-data
+        persistentVolumeClaim:
+          claimName: beszel-hub-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: beszel-hub
+  namespace: monitoring
+  labels:
+    app: beszel-hub
+spec:
+  selector:
+    app: beszel-hub
+  ports:
+  - port: 8090
+    targetPort: 8090
+    protocol: TCP
+    name: http
+  type: ClusterIP
+---
+# HTTP -> HTTPS redirect
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: beszel-redirect-https
+  namespace: monitoring
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+---
+# TLS certificate via cert-manager
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: beszel-charana-dev-tls
+  namespace: monitoring
+spec:
+  secretName: beszel-charana-dev-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - beszel.charana.dev
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: beszel-hub-http
+  namespace: monitoring
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`beszel.charana.dev`)
+      kind: Rule
+      middlewares:
+        - name: beszel-redirect-https
+          namespace: monitoring
+      services:
+        - name: noop@internal
+          kind: TraefikService
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: beszel-hub-https
+  namespace: monitoring
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`beszel.charana.dev`)
+      kind: Rule
+      middlewares: []
+      services:
+        - name: beszel-hub
+          port: 8090
+          scheme: http
+  tls:
+    secretName: beszel-charana-dev-tls
