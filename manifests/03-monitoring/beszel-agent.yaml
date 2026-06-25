@@ -72,16 +72,16 @@ spec:
         - name: beszel-agent-data
           mountPath: /var/lib/beszel-agent
         livenessProbe:
-          tcpSocket:
-            port: 45876
-          initialDelaySeconds: 15
+          exec:
+            command: ["/agent", "health"]
+          initialDelaySeconds: 30
           periodSeconds: 30
           timeoutSeconds: 5
           failureThreshold: 3
         readinessProbe:
-          tcpSocket:
-            port: 45876
-          initialDelaySeconds: 5
+          exec:
+            command: ["/agent", "health"]
+          initialDelaySeconds: 10
           periodSeconds: 10
           timeoutSeconds: 3
           failureThreshold: 3
