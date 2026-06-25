@@ -23,14 +23,16 @@ echo
 
 # --- Agent registration (universal token) ---
 echo ""
-echo "Get this from: Beszel Hub -> Settings -> Tokens -> Universal Token"
+echo "Get these from: Beszel Hub -> Add System -> copy the public KEY and TOKEN"
 echo "(Leave empty if the hub isn't running yet - re-run this script after creating the token)"
+read -p "Enter agent public KEY (optional): " AGENT_KEY
 read -p "Enter agent TOKEN (optional): " AGENT_TOKEN
 
 # Create the secret
 kubectl create secret generic beszel-secrets \
     --from-literal=admin-email="$ADMIN_EMAIL" \
     --from-literal=admin-password="$ADMIN_PASSWORD" \
+    --from-literal=key="${AGENT_KEY:-}" \
     --from-literal=token="${AGENT_TOKEN:-}" \
     --namespace=monitoring \
     --dry-run=client -o yaml | kubectl apply -f -
@@ -39,15 +41,15 @@ echo ""
 echo "Secret 'beszel-secrets' created/updated in monitoring namespace"
 echo ""
 
-if [ -z "$AGENT_TOKEN" ]; then
+if [ -z "$AGENT_KEY" ] || [ -z "$AGENT_TOKEN" ]; then
     echo "=== Phase 1: Hub bootstrap ==="
     echo ""
     echo "Next steps:"
     echo "1. Label the control-plane node:  kubectl label node <oracle-node> workload=monitoring"
     echo "2. Apply the hub:                  kubectl apply -f manifests/03-monitoring/beszel-hub.yaml"
     echo "3. Visit https://beszel.charana.dev (login with admin credentials above)"
-    echo "4. Hub UI -> Settings -> Tokens -> enable Universal Token"
-    echo "5. Re-run this script with the TOKEN"
+    echo "4. Hub UI -> Add System -> copy the public KEY and TOKEN"
+    echo "5. Re-run this script with the KEY and TOKEN"
     echo "6. Apply the agent DaemonSet:       kubectl apply -f manifests/03-monitoring/beszel-agent.yaml"
 else
     echo "=== Phase 2: Agent deployment ==="
