@@ -9,12 +9,8 @@
 #
 # Cross-namespace reference: kube-system-private-zone-only@kubernetescrd
 #
-# Tailscale-side setup (REQUIRED for clients to reach private services):
-#   1. On each always-on Oracle node, advertise its public IP as a /32 route:
-#        sudo tailscale up --advertise-routes=<oracle-public-ip>/32
-#   2. Approve the route in the Tailscale admin console.
-#   3. On every client that should reach private services:
-#        sudo tailscale up --accept-routes
+# Requires source-IP preservation (traefik-sourceip.yaml) + split-DNS
+# (split-dns.yaml). See README "Network Zones" section for full setup.
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware

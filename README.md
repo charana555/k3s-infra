@@ -168,9 +168,9 @@ Let's Encrypt cert issuance/renewal is unaffected: cert-manager's HTTP-01 solver
 
 ### Source IP preservation (REQUIRED for ipAllowList to work)
 
-The `ipAllowList` middleware only sees the Tailscale `100.x` source IP if Traefik receives the **real** client address. By default, Kubernetes SNATs the source IP before traffic reaches Traefik, so Traefik sees an internal node IP — not the client IP.
+The `ipAllowList` middleware only sees the Tailscale `100.x` source IP if Traefik receives the **real** client address. By default, k3s's klipper ServiceLB + flannel CNI SNAT traffic before it reaches Traefik, so Traefik sees an internal node IP — not the client IP. `externalTrafficPolicy: Local` does **not** fix this with klipper: klipper's iptables DNAT rules only match traffic destined for the node's primary IP (`10.0.0.167`), not the Tailscale interface IP (`100.126.165.111`). So split-DNS traffic to the Tailscale IP never reaches Traefik via klipper.
 
-The fix is `manifests/01-networking/traefik-helm-config.yaml` — a k3s `HelmChartConfig` that sets `externalTrafficPolicy: Local` on the Traefik Service. This tells Kubernetes to preserve the original source IP end-to-end (no SNAT). Traefik is pinned to `charana-vps` via `nodeSelector` because `Local` only forwards to Traefik pods on the same node where traffic arrives.
+The fix is `manifests/01-networking/traefik-sourceip.yaml` — a k3s `HelmChartConfig` that sets `hostNetwork: true`. Traefik binds `0.0.0.0:80/443` directly on the node, listening on **all** interfaces including `tailscale0`. No klipper, no flannel hop, no SNAT — the real source IP is preserved. The Service is changed to `ClusterIP` so klipper stops owning 80/443. Since there's no Service doing port translation, Traefik listens on 80/443 directly (requires `NET_BIND_SERVICE` capability). Pinned to `charana-vps` via `nodeSelector` because split-DNS points Tailscale clients to that node's Tailscale IP.
 
 ### Split-DNS (REQUIRED for Tailscale clients to reach private services)
 
@@ -186,43 +186,43 @@ The fix is split-DNS: an in-cluster CoreDNS (`manifests/01-networking/split-dns.
 ### Setup
 
 ```bash
-# 1. Remove any previous Traefik HelmChartConfig (e.g. hostNetwork)
+# 1. Remove any previous Traefik HelmChartConfig (e.g. externalTrafficPolicy)
 kubectl delete helmchartconfig traefik -n kube-system 2>/dev/null || true
 
-# 2. Apply the shared middleware + Traefik source-IP config + split-DNS
+# 2. Apply the shared middleware + Traefik hostNetwork config + split-DNS
 kubectl apply -f manifests/01-networking/private-zone.yaml
-kubectl apply -f manifests/01-networking/traefik-helm-config.yaml
+kubectl apply -f manifests/01-networking/traefik-sourceip.yaml
 kubectl apply -f manifests/01-networking/split-dns.yaml
 
-# 3. Wait for Traefik to restart
+# 3. Delete the Traefik deployment to force k3s to re-render with new values
+kubectl delete deploy traefik -n kube-system
+
+# 4. Wait for Traefik to restart
 kubectl rollout status deployment/traefik -n kube-system
 
-# 4. Apply the updated ingresses + namespace labels
+# 5. Clean up any lingering klipper DaemonSet
+kubectl delete ds svclb-traefik -n kube-system 2>/dev/null || true
+
+# 6. Apply the updated ingresses + namespace labels
 ./scripts/apply-manifests.sh
 
-# 5. Verify CoreDNS is serving the right records
+# 7. Verify CoreDNS is serving the right records
 dig @100.126.165.111 photos.charana.dev   # -> 100.126.165.111
 dig @100.126.165.111 charana.dev          # -> 80.225.224.42
 
-# 6. Verify Traefik config
-kubectl get svc -n kube-system traefik \
-  -o jsonpath='{.spec.externalTrafficPolicy}{"\n"}'   # Local
+# 8. Verify Traefik is on hostNetwork
+kubectl get deploy -n kube-system traefik \
+  -o jsonpath='{.spec.template.spec.hostNetwork}{"\n"}'   # true
 ```
 
 ### Tailscale-side setup (REQUIRED, out-of-cluster)
 
 ```bash
-# 1. On the Oracle node, remove any previous advertise-route
-sudo tailscale up    # drop --advertise-routes if previously set
-
-# 2. In the Tailscale admin console, configure split-DNS:
+# 1. In the Tailscale admin console, configure split-DNS:
 #    https://login.tailscale.com/admin/dns
 #    Nameservers -> Add nameserver -> Custom
 #    IP: 100.126.165.111   Restrict to domain: charana.dev
 #    Save
-
-# 3. On clients, remove --accept-routes (no longer needed)
-tailscale up    # drop --accept-routes
 ```
 
 ### Verify
