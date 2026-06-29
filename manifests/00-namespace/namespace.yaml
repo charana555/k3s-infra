@@ -6,6 +6,7 @@ metadata:
   labels:
     environment: production
     managed-by: k3s-infra
+    zone: public
 ---
 apiVersion: v1
 kind: Namespace
@@ -14,6 +15,7 @@ metadata:
   labels:
     environment: staging
     managed-by: k3s-infra
+    zone: public
 ---
 apiVersion: v1
 kind: Namespace
@@ -22,6 +24,7 @@ metadata:
   labels:
     environment: system
     managed-by: k3s-infra
+    zone: private
 ---
 apiVersion: v1
 kind: Namespace
@@ -30,6 +33,7 @@ metadata:
   labels:
     environment: apps
     managed-by: k3s-infra
+    zone: mixed
 ---
 apiVersion: v1
 kind: Namespace
@@ -38,6 +42,7 @@ metadata:
   labels:
     environment: nas
     managed-by: k3s-infra
+    zone: private
 ---
 apiVersion: v1
 kind: Namespace
@@ -46,6 +51,7 @@ metadata:
   labels:
     environment: llm
     managed-by: k3s-infra
+    zone: private
 ---
 apiVersion: v1
 kind: Namespace
@@ -54,6 +60,7 @@ metadata:
   labels:
     environment: system
     managed-by: k3s-infra
+    zone: private
 ---
 apiVersion: v1
 kind: Namespace
@@ -62,3 +69,4 @@ metadata:
   labels:
     environment: media
     managed-by: k3s-infra
+    zone: mixed

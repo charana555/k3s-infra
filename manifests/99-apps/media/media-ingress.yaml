@@ -1,79 +1,74 @@
+---
+# PRIVATE zone Ingress for the media stack: radarr/prowlarr/torrent/sonarr/lidarr.
+# Restricted to Tailscale-connected clients via the private-zone-only middleware.
+# jellyfin (media.charana.dev) is PUBLIC -> see media-public-ingress.yaml.
+# TLS comes from the shared media-certificate.yaml (media-dev-tls Secret).
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: media-ingress
-  namespace: media 
+  namespace: media
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    traefik.ingress.kubernetes.io/router.middlewares: kube-system-private-zone-only@kubernetescrd
 spec:
-  tls: 
+  tls:
   - hosts:
-      - radarr.charana.dev
-      - prowlarr.charana.dev
-      - torrent.charana.dev
-      - sonarr.charana.dev
-      - lidarr.charana.dev
-      - media.charana.dev
+    - radarr.charana.dev
+    - prowlarr.charana.dev
+    - torrent.charana.dev
+    - sonarr.charana.dev
+    - lidarr.charana.dev
     secretName: media-dev-tls
   rules:
-    - host: radarr.charana.dev
-      http:
-        paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: radarr
-              port:
-                number: 7878
-    - host: prowlarr.charana.dev
-      http:
-        paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: prowlarr
-              port:
-                number: 9696
-    - host: torrent.charana.dev
-      http:
-        paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: qbittorrent
-              port:
-                number: 8080
-    - host: sonarr.charana.dev
-      http:
-        paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: sonarr
-              port:
-                number: 8989
-    - host: lidarr.charana.dev
-      http:
-        paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: lidarr
-              port:
-                number: 8686
-    - host: media.charana.dev
-      http:
-        paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: jellyfin
-              port:
-                number: 8096
+  - host: radarr.charana.dev
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: radarr
+            port:
+              number: 7878
+  - host: prowlarr.charana.dev
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: prowlarr
+            port:
+              number: 9696
+  - host: torrent.charana.dev
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: qbittorrent
+            port:
+              number: 8080
+  - host: sonarr.charana.dev
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: sonarr
+            port:
+              number: 8989
+  - host: lidarr.charana.dev
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: lidarr
+            port:
+              number: 8686

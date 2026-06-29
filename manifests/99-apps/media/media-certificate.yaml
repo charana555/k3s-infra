@@ -1,0 +1,25 @@
+---
+# Explicit TLS certificate for all media*.charana.dev hostnames.
+# Decoupled from the Ingress resources because the media stack is split across
+# a private Ingress (radarr/prowlarr/torrent/sonarr/lidarr) and a public
+# Ingress (media/jellyfin). Both Ingresses reference this same Secret.
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: media-dev-tls
+  namespace: media
+  labels:
+    managed-by: k3s-infra
+spec:
+  secretName: media-dev-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - radarr.charana.dev
+    - prowlarr.charana.dev
+    - torrent.charana.dev
+    - sonarr.charana.dev
+    - lidarr.charana.dev
+    - media.charana.dev

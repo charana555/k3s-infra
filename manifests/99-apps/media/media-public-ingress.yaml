@@ -1,0 +1,29 @@
+---
+# PUBLIC zone Ingress for the media stack: jellyfin only.
+# No private-zone middleware -> reachable from anywhere.
+# The *arr/qbittorrent hosts live in media-ingress.yaml (private zone).
+# TLS comes from the shared media-certificate.yaml (media-dev-tls Secret).
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: media-public-ingress
+  namespace: media
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+spec:
+  tls:
+  - hosts:
+    - media.charana.dev
+    secretName: media-dev-tls
+  rules:
+  - host: media.charana.dev
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: jellyfin
+            port:
+              number: 8096

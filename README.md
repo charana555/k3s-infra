@@ -133,6 +133,75 @@ kubectl apply -f manifests/03-monitoring/headlamp.yaml
 
 > The old Kubernetes Dashboard files are retained side-by-side during the transition. Metrics (CPU/memory) charts work out-of-the-box since k3s ships metrics-server; no metrics-scraper sidecar is needed (unlike the old dashboard).
 
+## Network Zones (Private / Public)
+
+Cluster services are split into two access zones behind Traefik. URLs stay the same for everyone; the only difference is whether the client is connected to Tailscale.
+
+| Zone | Reachable from | Mechanism |
+|------|----------------|-----------|
+| **public** | Anyone on the internet | No access-control middleware |
+| **private** | Tailscale-connected clients only | `private-zone-only` middleware (Traefik `ipAllowList`) |
+
+Non-Tailscale clients hitting a private service get a **403 Forbidden** from Traefik.
+
+### Zone assignment
+
+| Host | Zone |
+|------|------|
+| `charana.dev`, `www.charana.dev` (portfolio) | public |
+| `media.charana.dev` (jellyfin) | public |
+| `cloud.charana.dev` (nextcloud) | private |
+| `office.charana.dev` (collabora) | private |
+| `photos.charana.dev` (immich) | private |
+| `radarr` / `prowlarr` / `torrent` / `sonarr` / `lidarr` `.charana.dev` | private |
+| `llm.charana.dev` (open-webui) | private |
+| `ai.charana.dev` (hermes) | private |
+| `beszel.charana.dev` | private |
+| `headlamp.charana.dev` | private |
+| `k8s.charana.dev` (kubernetes dashboard) | private |
+
+### How it works
+
+The shared middleware `private-zone-only` lives in `kube-system` (`manifests/01-networking/private-zone.yaml`) and allows only the Tailscale CGNAT ranges (`100.64.0.0/10`, `fd7a:115c:a1::/48`). It is attached to each private Ingress / IngressRoute. Public ingresses have no such middleware.
+
+Let's Encrypt cert issuance/renewal is unaffected: cert-manager's HTTP-01 solver creates its own challenge Ingress that is not gated by the per-app middleware.
+
+### Setup
+
+```bash
+# 1. Apply the shared middleware
+kubectl apply -f manifests/01-networking/private-zone.yaml
+
+# 2. Apply the updated ingresses + namespace labels
+./scripts/apply-manifests.sh
+```
+
+### Tailscale-side setup (REQUIRED, out-of-cluster)
+
+The cluster middleware alone returns 403 for everyone, including you, unless your Tailscale client reaches Traefik with a `100.x` source IP.
+
+```bash
+# 1. On each always-on Oracle node, advertise its public IP as a /32 route
+sudo tailscale up --advertise-routes=80.225.224.42/32
+
+# 2. Approve the route in the Tailscale admin console
+#    https://login.tailscale.com/admin/machines -> node -> Edit route settings -> approve /32
+
+# 3. On every device that should reach private services
+sudo tailscale up --accept-routes
+```
+
+### Verify
+
+```bash
+# Tailscale OFF -> private service returns 403, public returns 200
+curl -I https://photos.charana.dev    # 403
+curl -I https://charana.dev          # 200
+
+# Tailscale ON (with --accept-routes) -> both return 200
+curl -I https://photos.charana.dev    # 200
+```
+
 ## Security Notes
 
 - Never commit secrets to this repo

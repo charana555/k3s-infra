@@ -144,7 +144,7 @@ metadata:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     nginx.ingress.kubernetes.io/proxy-body-size: "10G"
-    traefik.ingress.kubernetes.io/router.middlewares: "nas-nextcloud-headers@kubernetescrd"
+    traefik.ingress.kubernetes.io/router.middlewares: "nas-nextcloud-headers@kubernetescrd,kube-system-private-zone-only@kubernetescrd"
 spec:
   tls:
   - hosts:
