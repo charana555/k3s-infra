@@ -183,6 +183,23 @@ The fix is split-DNS: an in-cluster CoreDNS (`manifests/01-networking/split-dns.
 | Tailscale ON | `100.126.165.111` (Tailscale IP) | `100.x` | 200 |
 | Tailscale OFF | `80.225.224.42` (public IP) | ISP IP | 403 |
 
+### Node prerequisites (on charana-vps)
+
+hostNetwork Traefik binds ports 80/443 directly on the node, so two node-level changes are required:
+
+```bash
+# 1. Allow non-root Traefik to bind ports < 1024
+sudo sysctl -w net.ipv4.ip_unprivileged_port_start=0
+echo 'net.ipv4.ip_unprivileged_port_start=0' | sudo tee /etc/sysctl.d/99-unprivileged-ports.conf
+
+# 2. Open ports 80/443 in the INPUT chain
+#    (Oracle Cloud's default firewall only allows SSH; with klipper, traffic
+#     went through FORWARD, but hostNetwork traffic hits INPUT instead)
+sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT
+sudo iptables -I INPUT -p tcp --dport 443 -j ACCEPT
+sudo netfilter-persistent save
+```
+
 ### Setup
 
 ```bash

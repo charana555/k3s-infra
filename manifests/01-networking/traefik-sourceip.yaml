@@ -23,6 +23,17 @@
 #
 # Must be combined with split-DNS (split-dns.yaml) — without it, Tailscale
 # clients resolve to the public IP and arrive with their ISP IP (403).
+#
+# Node prerequisites (on charana-vps):
+#   1. sysctl — allow non-root Traefik to bind ports < 1024:
+#        sudo sysctl -w net.ipv4.ip_unprivileged_port_start=0
+#        echo 'net.ipv4.ip_unprivileged_port_start=0' | sudo tee /etc/sysctl.d/99-unprivileged-ports.conf
+#   2. iptables — Oracle Cloud's default firewall only allows SSH (22) in the
+#      INPUT chain. With klipper, traffic went through FORWARD (bypassing this).
+#      With hostNetwork, traffic hits INPUT — so 80/443 must be opened:
+#        sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT
+#        sudo iptables -I INPUT -p tcp --dport 443 -j ACCEPT
+#        sudo netfilter-persistent save
 ---
 apiVersion: helm.cattle.io/v1
 kind: HelmChartConfig
