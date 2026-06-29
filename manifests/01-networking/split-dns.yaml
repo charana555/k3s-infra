@@ -56,7 +56,6 @@ data:
         bind 100.126.165.111
         errors
         health 100.126.165.111:8082
-        ready 100.126.165.111:8181
         forward . 1.1.1.1 8.8.8.8
         cache 30
     }
@@ -129,7 +128,7 @@ spec:
           failureThreshold: 3
         readinessProbe:
           httpGet:
-            path: /ready
+            path: /health
             port: 8082
           initialDelaySeconds: 3
           periodSeconds: 10
