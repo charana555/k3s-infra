@@ -1,0 +1,141 @@
+---
+# Headlamp - Kubernetes web UI (replaces the unmaintained Kubernetes Dashboard)
+# In-cluster backend serving plain HTTP on :4466; TLS terminates at Traefik.
+# Docs: https://headlamp.dev/docs/latest/installation/in-cluster/
+# Auth: ServiceAccount bearer token (see headlamp-rbac.yaml + scripts/create-headlamp-token.sh)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: headlamp
+  namespace: monitoring
+  labels:
+    app: headlamp
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: headlamp
+  template:
+    metadata:
+      labels:
+        app: headlamp
+    spec:
+      serviceAccountName: headlamp-admin
+      nodeSelector:
+        workload: monitoring
+      containers:
+      - name: headlamp
+        image: ghcr.io/headlamp-k8s/headlamp:v0.43.0
+        imagePullPolicy: Always
+        args:
+        - "-in-cluster"
+        - "-plugins-dir=/headlamp/plugins"
+        ports:
+        - containerPort: 4466
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 4466
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 30
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 4466
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: headlamp
+  namespace: monitoring
+  labels:
+    app: headlamp
+spec:
+  selector:
+    app: headlamp
+  ports:
+  - port: 80
+    targetPort: 4466
+    protocol: TCP
+    name: http
+  type: ClusterIP
+---
+# HTTP -> HTTPS redirect
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: headlamp-redirect-https
+  namespace: monitoring
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+---
+# TLS certificate via cert-manager
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: headlamp-charana-dev-tls
+  namespace: monitoring
+spec:
+  secretName: headlamp-charana-dev-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - headlamp.charana.dev
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: headlamp-http
+  namespace: monitoring
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`headlamp.charana.dev`)
+      kind: Rule
+      middlewares:
+        - name: headlamp-redirect-https
+          namespace: monitoring
+      services:
+        - name: noop@internal
+          kind: TraefikService
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: headlamp-https
+  namespace: monitoring
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`headlamp.charana.dev`)
+      kind: Rule
+      middlewares: []
+      services:
+        - name: headlamp
+          port: 80
+          scheme: http
+  tls:
+    secretName: headlamp-charana-dev-tls
