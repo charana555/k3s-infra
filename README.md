@@ -166,13 +166,37 @@ The shared middleware `private-zone-only` lives in `kube-system` (`manifests/01-
 
 Let's Encrypt cert issuance/renewal is unaffected: cert-manager's HTTP-01 solver creates its own challenge Ingress that is not gated by the per-app middleware.
 
+### Source IP preservation (REQUIRED for ipAllowList to work)
+
+The `ipAllowList` middleware only sees the Tailscale `100.x` source IP if Traefik receives the **real** client address. By default, k3s's klipper ServiceLB + flannel CNI masquerade (SNAT) host-originated traffic into the pod network, so Traefik sees `10.42.x.x` — not the client IP. `externalTrafficPolicy: Local` alone does **not** fix this with klipper.
+
+The fix is `manifests/01-networking/traefik-sourceip.yaml` — a k3s `HelmChartConfig` that patches the packaged Traefik chart to run with `hostNetwork: true` (binds the node's 80/443 directly, no klipper/flannel hop) and `service.type: ClusterIP` (releases 80/443 from klipper). Traefik is pinned to the always-on Oracle node (`charana-vps`) via `nodeSelector`.
+
+```bash
+# Apply the patch (k3s reconciles the HelmChartConfig ~30-60s)
+kubectl apply -f manifests/01-networking/traefik-sourceip.yaml
+
+# Remove the leftover klipper DaemonSet if k3s doesn't auto-clean it
+kubectl delete ds svclb-traefik -n kube-system 2>/dev/null || true
+
+# Verify Traefik is on hostNetwork
+kubectl get deploy -n kube-system traefik \
+  -o jsonpath='{.spec.template.spec.hostNetwork}{"\n"}'   # true
+kubectl get svc -n kube-system traefik \
+  -o jsonpath='{.spec.type}{"\n"}'                        # ClusterIP
+```
+
 ### Setup
 
 ```bash
-# 1. Apply the shared middleware
+# 1. Apply the shared middleware + Traefik source-IP patch
 kubectl apply -f manifests/01-networking/private-zone.yaml
+kubectl apply -f manifests/01-networking/traefik-sourceip.yaml
 
-# 2. Apply the updated ingresses + namespace labels
+# 2. Remove leftover klipper DaemonSet
+kubectl delete ds svclb-traefik -n kube-system 2>/dev/null || true
+
+# 3. Apply the updated ingresses + namespace labels
 ./scripts/apply-manifests.sh
 ```
 
