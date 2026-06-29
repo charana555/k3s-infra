@@ -1,0 +1,142 @@
+---
+# Split-DNS for Tailscale-based access control.
+#
+# CoreDNS runs on the Oracle node's hostNetwork (including the Tailscale
+# interface) and serves the charana.dev zone with split-horizon records:
+#   - private subdomains -> 100.126.165.111 (Oracle Tailscale IP)
+#   - public  subdomains -> 80.225.224.42   (Oracle public IP)
+#   - anything else      -> falls through to 1.1.1.1 / 8.8.8.8
+#
+# Tailscale admin console -> DNS -> Add nameserver -> Custom
+#   IP: 100.126.165.111   Domain: charana.dev
+#
+# Tailscale-on clients resolve private services to the Tailscale IP, so
+# traffic stays inside the tunnel and arrives at Traefik with a 100.x
+# source -> ipAllowList passes -> 200.
+#
+# Tailscale-off clients use normal DNS -> public IP -> Traefik sees the
+# ISP IP -> ipAllowList rejects -> 403.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: split-dns-corefile
+  namespace: kube-system
+  labels:
+    managed-by: k3s-infra
+data:
+  Corefile: |
+    charana.dev:53 {
+        errors
+        hosts {
+            100.126.165.111 cloud.charana.dev
+            100.126.165.111 office.charana.dev
+            100.126.165.111 photos.charana.dev
+            100.126.165.111 radarr.charana.dev
+            100.126.165.111 prowlarr.charana.dev
+            100.126.165.111 torrent.charana.dev
+            100.126.165.111 sonarr.charana.dev
+            100.126.165.111 lidarr.charana.dev
+            100.126.165.111 llm.charana.dev
+            100.126.165.111 ai.charana.dev
+            100.126.165.111 beszel.charana.dev
+            100.126.165.111 headlamp.charana.dev
+            100.126.165.111 k8s.charana.dev
+            80.225.224.42   charana.dev
+            80.225.224.42   www.charana.dev
+            80.225.224.42   media.charana.dev
+            fallthrough
+        }
+        forward . 1.1.1.1 8.8.8.8
+        cache 30
+    }
+
+    .:53 {
+        errors
+        health :8082
+        ready :8181
+        forward . 1.1.1.1 8.8.8.8
+        cache 30
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: split-dns
+  namespace: kube-system
+  labels:
+    app: split-dns
+    managed-by: k3s-infra
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: split-dns
+  template:
+    metadata:
+      labels:
+        app: split-dns
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: charana-vps
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule
+      containers:
+      - name: coredns
+        image: coredns/coredns:1.12.0
+        imagePullPolicy: IfNotPresent
+        args: ["-conf", "/etc/coredns/Corefile"]
+        ports:
+        - containerPort: 53
+          name: dns-udp
+          protocol: UDP
+        - containerPort: 53
+          name: dns-tcp
+          protocol: TCP
+        - containerPort: 8082
+          name: health
+          protocol: TCP
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "25m"
+          limits:
+            memory: "128Mi"
+            cpu: "250m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
+            add:
+              - NET_BIND_SERVICE
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8082
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8082
+          initialDelaySeconds: 3
+          periodSeconds: 10
+          failureThreshold: 3
+        volumeMounts:
+        - name: corefile
+          mountPath: /etc/coredns
+          readOnly: true
+      volumes:
+      - name: corefile
+        configMap:
+          name: split-dns-corefile

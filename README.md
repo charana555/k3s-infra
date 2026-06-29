@@ -170,60 +170,68 @@ Let's Encrypt cert issuance/renewal is unaffected: cert-manager's HTTP-01 solver
 
 The `ipAllowList` middleware only sees the Tailscale `100.x` source IP if Traefik receives the **real** client address. By default, k3s's klipper ServiceLB + flannel CNI masquerade (SNAT) host-originated traffic into the pod network, so Traefik sees `10.42.x.x` — not the client IP. `externalTrafficPolicy: Local` alone does **not** fix this with klipper.
 
-The fix is `manifests/01-networking/traefik-sourceip.yaml` — a k3s `HelmChartConfig` that patches the packaged Traefik chart to run with `hostNetwork: true` (binds the node's 80/443 directly, no klipper/flannel hop) and `service.type: ClusterIP` (releases 80/443 from klipper). Traefik is pinned to the always-on Oracle node (`charana-vps`) via `nodeSelector`.
+The fix is `manifests/01-networking/traefik-sourceip.yaml` — a k3s `HelmChartConfig` that patches the packaged Traefik chart to run with `hostNetwork: true` (binds the node's 80/443 directly, no klipper/flannel hop), `service.type: ClusterIP` (releases 80/443 from klipper), `ports.web.port: 80` / `ports.websecure.port: 443` (standard HTTP(S) ports), and `NET_BIND_SERVICE` capability (lets non-root Traefik bind ports <1024). Traefik is pinned to the always-on Oracle node (`charana-vps`) via `nodeSelector`.
 
-```bash
-# Apply the patch (k3s reconciles the HelmChartConfig ~30-60s)
-kubectl apply -f manifests/01-networking/traefik-sourceip.yaml
+### Split-DNS (REQUIRED for Tailscale clients to reach private services)
 
-# Remove the leftover klipper DaemonSet if k3s doesn't auto-clean it
-kubectl delete ds svclb-traefik -n kube-system 2>/dev/null || true
+With `hostNetwork`, Traefik listens on **all** node interfaces — including the Tailscale interface (`100.126.165.111:443`). But public DNS resolves `*.charana.dev` to the Oracle node's **public** IP (`80.225.224.42`). On a cloud VM with 1:1 NAT, the node cannot hairpin packets to its own public IP while preserving the Tailscale source — so traffic arrives at Traefik with the client's ISP IP, not a `100.x` address, and the ipAllowList rejects it (403).
 
-# Verify Traefik is on hostNetwork
-kubectl get deploy -n kube-system traefik \
-  -o jsonpath='{.spec.template.spec.hostNetwork}{"\n"}'   # true
-kubectl get svc -n kube-system traefik \
-  -o jsonpath='{.spec.type}{"\n"}'                        # ClusterIP
-```
+The fix is split-DNS: an in-cluster CoreDNS (`manifests/01-networking/split-dns.yaml`) resolves private `*.charana.dev` subdomains to the Oracle node's **Tailscale IP** (`100.126.165.111`) instead of the public IP. Traffic stays inside the Tailscale tunnel and arrives at Traefik with a `100.x` source → ipAllowList passes → 200. Public subdomains (`charana.dev`, `www.charana.dev`, `media.charana.dev`) still resolve to the public IP.
+
+| Client | DNS resolves private services to | Source Traefik sees | Result |
+|--------|-----------------------------------|--------------------|--------|
+| Tailscale ON | `100.126.165.111` (Tailscale IP) | `100.x` | 200 |
+| Tailscale OFF | `80.225.224.42` (public IP) | ISP IP | 403 |
 
 ### Setup
 
 ```bash
-# 1. Apply the shared middleware + Traefik source-IP patch
+# 1. Apply the shared middleware + Traefik source-IP patch + split-DNS
 kubectl apply -f manifests/01-networking/private-zone.yaml
 kubectl apply -f manifests/01-networking/traefik-sourceip.yaml
+kubectl apply -f manifests/01-networking/split-dns.yaml
 
 # 2. Remove leftover klipper DaemonSet
 kubectl delete ds svclb-traefik -n kube-system 2>/dev/null || true
 
 # 3. Apply the updated ingresses + namespace labels
 ./scripts/apply-manifests.sh
+
+# 4. Verify CoreDNS is serving the right records
+dig @100.126.165.111 photos.charana.dev   # -> 100.126.165.111
+dig @100.126.165.111 charana.dev          # -> 80.225.224.42
 ```
 
 ### Tailscale-side setup (REQUIRED, out-of-cluster)
 
-The cluster middleware alone returns 403 for everyone, including you, unless your Tailscale client reaches Traefik with a `100.x` source IP.
-
 ```bash
-# 1. On each always-on Oracle node, advertise its public IP as a /32 route
-sudo tailscale up --advertise-routes=80.225.224.42/32
+# 1. On the Oracle node, remove the broken advertise-route (if previously set)
+sudo tailscale up    # drop --advertise-routes=80.225.224.42/32
 
-# 2. Approve the route in the Tailscale admin console
-#    https://login.tailscale.com/admin/machines -> node -> Edit route settings -> approve /32
+# 2. In the Tailscale admin console, configure split-DNS:
+#    https://login.tailscale.com/admin/dns
+#    Nameservers -> Add nameserver -> Custom
+#    IP: 100.126.165.111   Restrict to domain: charana.dev
+#    Save
 
-# 3. On every device that should reach private services
-sudo tailscale up --accept-routes
+# 3. On clients, remove --accept-routes (no longer needed)
+tailscale up    # drop --accept-routes
 ```
 
 ### Verify
 
 ```bash
+# CoreDNS is serving the right records
+dig @100.126.165.111 photos.charana.dev   # -> 100.126.165.111
+dig @100.126.165.111 charana.dev          # -> 80.225.224.42
+
 # Tailscale OFF -> private service returns 403, public returns 200
 curl -I https://photos.charana.dev    # 403
 curl -I https://charana.dev          # 200
 
-# Tailscale ON (with --accept-routes) -> both return 200
+# Tailscale ON -> both return 200
 curl -I https://photos.charana.dev    # 200
+curl -I https://charana.dev           # 200
 ```
 
 ## Security Notes
