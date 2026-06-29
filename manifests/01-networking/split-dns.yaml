@@ -27,6 +27,7 @@ metadata:
 data:
   Corefile: |
     charana.dev:53 {
+        bind 100.126.165.111
         errors
         hosts {
             100.126.165.111 cloud.charana.dev
@@ -52,9 +53,10 @@ data:
     }
 
     .:53 {
+        bind 100.126.165.111
         errors
-        health :8082
-        ready :8181
+        health 100.126.165.111:8082
+        ready 100.126.165.111:8181
         forward . 1.1.1.1 8.8.8.8
         cache 30
     }
@@ -136,7 +138,11 @@ spec:
         - name: corefile
           mountPath: /etc/coredns
           readOnly: true
+        - name: tmp
+          mountPath: /tmp
       volumes:
       - name: corefile
         configMap:
           name: split-dns-corefile
+      - name: tmp
+        emptyDir: {}
