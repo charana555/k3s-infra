@@ -1,0 +1,34 @@
+---
+# Headlamp RBAC - ServiceAccount + cluster-admin binding + long-lived token Secret
+# The token is used to log in to Headlamp (paste at the login screen).
+# Retrieve it with: ./scripts/create-headlamp-token.sh
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: headlamp-admin
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: headlamp-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: headlamp-admin
+    namespace: monitoring
+---
+# Long-lived service-account token (K8s 1.22+ pattern). The token controller
+# populates .data.token automatically once bound to the ServiceAccount.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: headlamp-admin
+  namespace: monitoring
+  annotations:
+    kubernetes.io/service-account.name: "headlamp-admin"
+type: kubernetes.io/service-account-token
