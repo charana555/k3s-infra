@@ -145,6 +145,8 @@ spec:
     - match: Host(`beszel.charana.dev`)
       kind: Rule
       middlewares:
+        - name: private-zone-only
+          namespace: kube-system
         - name: beszel-redirect-https
           namespace: monitoring
       services:
@@ -162,7 +164,9 @@ spec:
   routes:
     - match: Host(`beszel.charana.dev`)
       kind: Rule
-      middlewares: []
+      middlewares:
+        - name: private-zone-only
+          namespace: kube-system
       services:
         - name: beszel-hub
           port: 8090

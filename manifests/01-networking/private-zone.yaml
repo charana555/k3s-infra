@@ -1,0 +1,27 @@
+---
+# Shared access-control middleware for the "private" zone.
+# Attaching this to an Ingress/IngressRoute restricts access to Tailscale-
+# connected clients only (source IP in the Tailscale CGNAT range).
+# Non-Tailscale sources receive a 403 Forbidden from Traefik.
+#
+# Tailscale CGNAT ranges:
+#   IPv4: 100.64.0.0/10     IPv6: fd7a:115c:a1::/48
+#
+# Cross-namespace reference: kube-system-private-zone-only@kubernetescrd
+#
+# Requires source-IP preservation (traefik-sourceip.yaml) + split-DNS
+# (split-dns.yaml). See README "Network Zones" section for full setup.
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: private-zone-only
+  namespace: kube-system
+  labels:
+    managed-by: k3s-infra
+    zone: private
+spec:
+  ipAllowList:
+    sourceRange:
+      - 100.64.0.0/10        # Tailscale IPv4 CGNAT
+      - fd7a:115c:a1::/48     # Tailscale IPv6 CGNAT

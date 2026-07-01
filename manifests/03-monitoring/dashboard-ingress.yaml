@@ -10,6 +10,8 @@ spec:
     - match: Host(`k8s.charana.dev`)
       kind: Rule
       middlewares:
+        - name: private-zone-only
+          namespace: kube-system
         - name: redirect-https
           namespace: kubernetes-dashboard
       services:
@@ -27,7 +29,9 @@ spec:
   routes:
     - match: Host(`k8s.charana.dev`)
       kind: Rule
-      middlewares: []
+      middlewares:
+        - name: private-zone-only
+          namespace: kube-system
       services:
         - name: kubernetes-dashboard
           port: 443

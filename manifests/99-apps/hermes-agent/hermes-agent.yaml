@@ -146,6 +146,7 @@ metadata:
   namespace: apps
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: kube-system-private-zone-only@kubernetescrd
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   tls:

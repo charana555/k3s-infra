@@ -1,0 +1,70 @@
+---
+# Preserve client source IP for Traefik so the private-zone ipAllowList
+# middleware sees the real Tailscale 100.x address instead of a masqueraded
+# flannel/kube-proxy IP.
+#
+# Root cause: k3s's klipper ServiceLB only DNATs traffic destined for the
+# node's primary IP, NOT the Tailscale interface IP. So split-DNS traffic
+# to 100.126.165.111:443 never reaches Traefik via klipper.
+#
+# Fix: hostNetwork: true makes Traefik bind 0.0.0.0:80/443 directly — it
+# listens on ALL interfaces including tailscale0. No klipper, no flannel
+# hop, no SNAT — the real source IP is preserved. The Service is changed
+# to ClusterIP so klipper stops owning 80/443 (prevents iptables-DNAT
+# conflict).
+#
+# With hostNetwork there is no Service doing port translation (80→8000),
+# so Traefik must listen on 80/443 directly. NET_BIND_SERVICE capability
+# is required to bind ports < 1024.
+#
+# Pinned to charana-vps (the Oracle node) because split-DNS points Tailscale
+# clients to its Tailscale IP (100.126.165.111) and hostNetwork binds that
+# node's interfaces.
+#
+# Must be combined with split-DNS (split-dns.yaml) — without it, Tailscale
+# clients resolve to the public IP and arrive with their ISP IP (403).
+#
+# Node prerequisites (on charana-vps):
+#   1. sysctl — allow non-root Traefik to bind ports < 1024:
+#        sudo sysctl -w net.ipv4.ip_unprivileged_port_start=0
+#        echo 'net.ipv4.ip_unprivileged_port_start=0' | sudo tee /etc/sysctl.d/99-unprivileged-ports.conf
+#   2. iptables — Oracle Cloud's default firewall only allows SSH (22) in the
+#      INPUT chain. With klipper, traffic went through FORWARD (bypassing this).
+#      With hostNetwork, traffic hits INPUT — so 80/443 must be opened:
+#        sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT
+#        sudo iptables -I INPUT -p tcp --dport 443 -j ACCEPT
+#        sudo netfilter-persistent save
+---
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+  labels:
+    managed-by: k3s-infra
+spec:
+  valuesContent: |-
+    hostNetwork: true
+    nodeSelector:
+      kubernetes.io/hostname: charana-vps
+    tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/control-plane
+        effect: NoSchedule
+    deployment:
+      dnsPolicy: ClusterFirstWithHostNet
+    service:
+      spec:
+        type: ClusterIP
+    ports:
+      web:
+        port: 80
+      websecure:
+        port: 443
+    securityContext:
+      capabilities:
+        add:
+          - NET_BIND_SERVICE
+    additionalArguments:
+      - "--providers.kubernetescrd.allowCrossNamespace=true"

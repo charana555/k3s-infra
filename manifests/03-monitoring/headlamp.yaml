@@ -115,6 +115,8 @@ spec:
     - match: Host(`headlamp.charana.dev`)
       kind: Rule
       middlewares:
+        - name: private-zone-only
+          namespace: kube-system
         - name: headlamp-redirect-https
           namespace: monitoring
       services:
@@ -132,7 +134,9 @@ spec:
   routes:
     - match: Host(`headlamp.charana.dev`)
       kind: Rule
-      middlewares: []
+      middlewares:
+        - name: private-zone-only
+          namespace: kube-system
       services:
         - name: headlamp
           port: 80
