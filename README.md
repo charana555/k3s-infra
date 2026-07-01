@@ -24,7 +24,7 @@ k3s-infra/
 │   ├── 00-namespace/   # Namespace definitions
 │   ├── 01-networking/  # Traefik, Ingress resources
 │   ├── 02-storage/     # Storage classes and PVCs
-│   ├── 03-monitoring/  # Beszel, Kubernetes Dashboard, Headlamp
+│   ├── 03-monitoring/  # Besz, Headlamp
 │   └── 99-apps/        # Application deployments
 ├── scripts/            # Helper scripts
 ├── config/             # Configuration files
@@ -131,7 +131,6 @@ kubectl apply -f manifests/03-monitoring/headlamp.yaml
 | `manifests/03-monitoring/headlamp-rbac.yaml` | `headlamp-admin` ServiceAccount + cluster-admin ClusterRoleBinding + token Secret |
 | `scripts/create-headlamp-token.sh` | Prints/mints a ServiceAccount token for logging in to Headlamp |
 
-> The old Kubernetes Dashboard files are retained side-by-side during the transition. Metrics (CPU/memory) charts work out-of-the-box since k3s ships metrics-server; no metrics-scraper sidecar is needed (unlike the old dashboard).
 
 ## Network Zones (Private / Public)
 
@@ -158,7 +157,6 @@ Non-Tailscale clients hitting a private service get a **403 Forbidden** from Tra
 | `ai.charana.dev` (hermes) | private |
 | `beszel.charana.dev` | private |
 | `headlamp.charana.dev` | private |
-| `k8s.charana.dev` (kubernetes dashboard) | private |
 
 ### How it works
 
