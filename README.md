@@ -183,6 +183,18 @@ The fix is split-DNS: an in-cluster CoreDNS (`manifests/01-networking/split-dns.
 | Tailscale ON | `100.126.165.111` (Tailscale IP) | `100.x` | 200 |
 | Tailscale OFF | `80.225.224.42` (public IP) | ISP IP | 403 |
 
+### In-cluster server-to-server access
+
+Some workloads inside the cluster reach a private service via its **public hostname** — e.g. Collabora fetches/saves files from Nextcloud over WOPI at `https://cloud.charana.dev`, and Nextcloud polls Collabora's discovery endpoint at `https://office.charana.dev`. In-cluster pods can't use the split-DNS resolver (it `bind`s only to the Tailscale IP), so kube-dns resolves these names to the node's **public** IP and the request reaches hostNetwork Traefik with a source IP in the pod CIDR or node IP — not a Tailscale `100.x` address — which `private-zone-only` would otherwise 403.
+
+To allow these trusted server-to-server flows, `private-zone-only` also lists the in-cluster pod CIDR (`10.42.0.0/16`), the node's internal IP (`10.0.0.167/32`), and the node's public IP (`80.225.224.42/32`, for hairpin self-loop via Oracle 1:1 NAT). This does **not** weaken the external gate: an external client's source is its ISP IP (still rejected), and the cluster already permits unrestricted pod-to-pod traffic (no `NetworkPolicy`).
+
+| Source | Resolves private service to | Source Traefik sees | Result |
+|--------|-----------------------------|--------------------|--------|
+| Tailscale ON (browser) | `100.126.165.111` (Tailscale IP) | `100.x` | 200 |
+| Tailscale OFF (browser) | `80.225.224.42` (public IP) | ISP IP | 403 |
+| In-cluster pod (WOPI / automation) | `80.225.224.42` (public IP) | `10.42.x.x` / node IP | 200 |
+
 ### Node prerequisites (on charana-vps)
 
 hostNetwork Traefik binds ports 80/443 directly on the node, so two node-level changes are required:
