@@ -1,0 +1,157 @@
+---
+# Hermes Agent Deployment - Prashan
+# Self-improving AI agent built by Nous Research (Discord only)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hermes-prashan-data
+  namespace: apps
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hermes-prashan
+  namespace: apps
+  labels:
+    app: hermes-prashan
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: hermes-prashan
+  template:
+    metadata:
+      labels:
+        app: hermes-prashan
+    spec:
+      containers:
+      - name: hermes-prashan
+        image: nousresearch/hermes-agent:latest
+        command: ["hermes"]
+        args: ["gateway"]
+        ports:
+        - containerPort: 9119
+          name: dashboard
+          protocol: TCP
+        env:
+        - name: HERMES_DASHBOARD
+          value: "1"
+        - name: HERMES_DASHBOARD_HOST
+          value: "0.0.0.0"
+        - name: HERMES_DASHBOARD_PORT
+          value: "9119"
+        - name: HERMES_DASHBOARD_INSECURE
+          value: "1"
+        - name: HERMES_GATEWAY_BOOTSTRAP_STATE
+          value: "running"
+        - name: OLLAMA_BASE_URL
+          value: "http://ollama.llm.svc.cluster.local:11434"
+        - name: OPENAI_BASE_URL
+          value: "https://grid.ai.juspay.net"
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: hermes-prashan-secrets
+              key: api-key
+        - name: DISCORD_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hermes-prashan-secrets
+              key: discord-bot-token
+        - name: DISCORD_HOME_CHANNEL
+          valueFrom:
+            secretKeyRef:
+              name: hermes-prashan-secrets
+              key: discord-home-channel
+        - name: DISCORD_HOME_CHANNEL_NAME
+          valueFrom:
+            secretKeyRef:
+              name: hermes-prashan-secrets
+              key: discord-home-channel-name
+        - name: DISCORD_ALLOWED_USERS
+          valueFrom:
+            secretKeyRef:
+              name: hermes-prashan-secrets
+              key: discord-user-id
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: hermes-data
+          mountPath: /opt/data
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 9119
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 9119
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: hermes-data
+        persistentVolumeClaim:
+          claimName: hermes-prashan-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hermes-prashan
+  namespace: apps
+  labels:
+    app: hermes-prashan
+spec:
+  selector:
+    app: hermes-prashan
+  ports:
+  - port: 80
+    targetPort: 9119
+    protocol: TCP
+    name: dashboard
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hermes-prashan
+  namespace: apps
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: kube-system-private-zone-only@kubernetescrd
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - prashan-ai.charana.dev
+    secretName: prashan-ai-charana-dev-tls
+  rules:
+  - host: prashan-ai.charana.dev
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: hermes-prashan
+            port:
+              number: 80
