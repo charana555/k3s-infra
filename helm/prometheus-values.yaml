@@ -1,0 +1,106 @@
+# kube-prometheus-stack Helm chart values
+# Chart: prometheus-community/kube-prometheus-stack
+# Deploys: Prometheus, Grafana, Alertmanager, node-exporter, kube-state-metrics
+# Expose only Grafana via Traefik + cert-manager at grafana.charana.dev
+# Prometheus, Alertmanager stay internal (ClusterIP)
+---
+crds:
+  enabled: true
+
+# Pin operator to pavan-vps (has scheduler room; charana-vps is at 97% CPU requests)
+prometheusOperator:
+  nodeSelector:
+    kubernetes.io/hostname: pavan-vps
+
+# k3s does not expose these on secure ports by default; disable to avoid scrape noise
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeEtcd:
+  enabled: false
+
+prometheus:
+  service:
+    type: ClusterIP
+  prometheusSpec:
+    retention: 7d
+    nodeSelector:
+      kubernetes.io/hostname: pavan-vps
+    resources:
+      requests:
+        cpu: 200m
+        memory: 1Gi
+      limits:
+        memory: 2Gi
+    # Discover all ServiceMonitors/PodMonitors in the cluster, not just release-labeled ones
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 15Gi
+
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    nodeSelector:
+      kubernetes.io/hostname: pavan-vps
+    retention: 120h
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi
+
+grafana:
+  enabled: true
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  nodeSelector:
+    kubernetes.io/hostname: pavan-vps
+  persistence:
+    enabled: true
+    type: pvc
+    storageClassName: local-path
+    accessModes: ["ReadWriteOnce"]
+    size: 2Gi
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - grafana.charana.dev
+    path: /
+    pathType: Prefix
+    tls:
+      - secretName: grafana-charana-dev-tls
+        hosts:
+          - grafana.charana.dev
+  # Loki datasource is provisioned automatically on first login
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      access: proxy
+      url: http://loki.monitoring.svc.cluster.local:3100
+      isDefault: false

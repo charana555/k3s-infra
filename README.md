@@ -20,11 +20,12 @@ cd k3s-infra
 
 ```
 k3s-infra/
+├── helm/               # Helm chart values (observability stack)
 ├── manifests/          # Kubernetes YAML manifests
 │   ├── 00-namespace/   # Namespace definitions
 │   ├── 01-networking/  # Traefik, Ingress resources
 │   ├── 02-storage/     # Storage classes and PVCs
-│   ├── 03-monitoring/  # Besz, Headlamp
+│   ├── 03-monitoring/  # Beszel, Headlamp, Grafana secret template
 │   └── 99-apps/        # Application deployments
 ├── scripts/            # Helper scripts
 ├── config/             # Configuration files
@@ -58,6 +59,60 @@ Manifests are numbered for ordered application:
 - `02-*`: Storage (PVs, PVCs)
 - `03-*`: Monitoring/Observability
 - `99-*`: Applications (applied last)
+
+Helm chart values are tracked in `helm/` and deployed via `scripts/deploy-observability.sh` (separate from `apply-manifests.sh`).
+
+## Observability (Prometheus, Grafana, Loki)
+
+Full metrics and log monitoring stack deployed via Helm. Values are tracked in `helm/`.
+
+- **Prometheus** - metrics scraping and storage (7d retention)
+- **Grafana** - dashboards and visualization at `https://grafana.charana.dev`
+- **Alertmanager** - alert routing (internal only)
+- **Loki** - log aggregation (72h retention, filesystem storage)
+- **Alloy** - log collector DaemonSet (all nodes, all namespaces)
+- **node-exporter** - host metrics (CPU, memory, disk, network)
+- **kube-state-metrics** - Kubernetes object state metrics
+
+Only Grafana is exposed externally. Prometheus, Alertmanager, and Loki stay internal (ClusterIP).
+
+### Architecture
+
+```text
+All nodes: Alloy (DaemonSet, tolerates all taints)
+    |
+    v
+Loki (single binary, pavan-vps, 20Gi PVC)
+    +--> Grafana datasource (auto-provisioned)
+
+All services: node-exporter + kube-state-metrics
+    |
+    v
+Prometheus (pavan-vps, 15Gi PVC)
+    +--> Grafana datasource (auto-provisioned)
+    +--> Alertmanager (pavan-vps, 2Gi PVC)
+```
+
+### Setup
+
+```bash
+# Deploy the full stack (Prometheus, Grafana, Alertmanager, Loki, Alloy)
+./scripts/deploy-observability.sh
+
+# Visit https://grafana.charana.dev and log in with admin credentials
+```
+
+### Files
+
+| File | Description |
+|------|-------------|
+| `helm/prometheus-values.yaml` | kube-prometheus-stack Helm values (Prometheus, Grafana, Alertmanager) |
+| `helm/loki-values.yaml` | Loki monolithic Helm values (filesystem storage, 72h retention) |
+| `helm/alloy-values.yaml` | Grafana Alloy DaemonSet values (log collection to Loki) |
+| `manifests/03-monitoring/grafana-admin-secret-template.yaml` | Template for Grafana admin credentials |
+| `scripts/deploy-observability.sh` | Deploys all three Helm releases in order |
+
+> Existing Beszel (host monitoring) and Headlamp (K8s web UI) continue to run alongside the observability stack.
 
 ## Monitoring (Beszel)
 

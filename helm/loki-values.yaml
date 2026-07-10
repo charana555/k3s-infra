@@ -1,0 +1,79 @@
+# Loki Helm chart values (Grafana Community chart)
+# Chart: grafana-community/loki
+# Mode: Monolithic (single binary), filesystem storage, no gateway, no MinIO
+# Retention: 72h (3 days) - increase to 168h (7d) when disk looks stable
+---
+deploymentMode: Monolithic
+
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+  storage:
+    type: filesystem
+  limits_config:
+    retention_period: 72h
+    max_query_lookback: 72h
+  compactor:
+    working_directory: /var/loki/retention
+    retention_enabled: true
+    retention_delete_delay: 2h
+    delete_request_store: filesystem
+
+singleBinary:
+  replicas: 1
+  nodeSelector:
+    kubernetes.io/hostname: pavan-vps
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  persistence:
+    enabled: true
+    storageClass: local-path
+    accessModes:
+      - ReadWriteOnce
+    size: 20Gi
+    whenDeleted: Retain
+    whenScaled: Retain
+
+# Disable everything not needed for single-replica monolithic mode
+gateway:
+  enabled: false
+ingress:
+  enabled: false
+minio:
+  enabled: false
+lokiCanary:
+  enabled: false
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+
+# Zero out distributed-mode components
+backend: { replicas: 0 }
+read: { replicas: 0 }
+write: { replicas: 0 }
+ingester: { replicas: 0 }
+querier: { replicas: 0 }
+queryFrontend: { replicas: 0 }
+queryScheduler: { replicas: 0 }
+distributor: { replicas: 0 }
+compactor: { replicas: 0 }
+indexGateway: { replicas: 0 }
+bloomPlanner: { replicas: 0 }
+bloomBuilder: { replicas: 0 }
+bloomGateway: { replicas: 0 }
