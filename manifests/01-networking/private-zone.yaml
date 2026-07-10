@@ -1,11 +1,21 @@
 ---
 # Shared access-control middleware for the "private" zone.
-# Attaching this to an Ingress/IngressRoute restricts access to Tailscale-
-# connected clients only (source IP in the Tailscale CGNAT range).
-# Non-Tailscale sources receive a 403 Forbidden from Traefik.
+# Attaching this to an Ingress/IngressRoute restricts access to:
+#   - Tailscale-connected clients (source IP in the Tailscale CGNAT range), and
+#   - trusted in-cluster sources (pod/node CIDRs) so server-to-server flows
+#     that resolve the public hostname succeed — e.g. Collabora -> Nextcloud
+#     WOPI callbacks and Nextcloud -> Collabora discovery polling.
+# All other sources receive a 403 Forbidden from Traefik.
 #
-# Tailscale CGNAT ranges:
-#   IPv4: 100.64.0.0/10     IPv6: fd7a:115c:a1::/48
+# Allowed ranges:
+#   Tailscale CGNAT:   100.64.0.0/10   fd7a:115c:a1::/48
+#   In-cluster pod:    10.42.0.0/16     (flannel pod CIDR)
+#   Node internal IP:  10.0.0.167/32   (SNAT'd pod egress)
+#   Node public IP:    80.225.224.42/32 (hairpin self-loop via Oracle 1:1 NAT)
+#
+# The in-cluster ranges are safe to allow: an external client's source is its
+# ISP IP (still rejected), and the cluster already permits unrestricted
+# pod<->pod traffic (no NetworkPolicy). This only relaxes the *external* gate.
 #
 # Cross-namespace reference: kube-system-private-zone-only@kubernetescrd
 #
@@ -25,3 +35,6 @@ spec:
     sourceRange:
       - 100.64.0.0/10        # Tailscale IPv4 CGNAT
       - fd7a:115c:a1::/48     # Tailscale IPv6 CGNAT
+      - 10.42.0.0/16          # in-cluster pod CIDR (flannel) — S2S WOPI/automation
+      - 10.0.0.167/32         # charana-vps internal IP (SNAT'd pod egress)
+      - 80.225.224.42/32      # charana-vps public IP (hairpin self-loop via Oracle 1:1 NAT)
