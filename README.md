@@ -155,6 +155,7 @@ Non-Tailscale clients hitting a private service get a **403 Forbidden** from Tra
 | `radarr` / `prowlarr` / `torrent` / `sonarr` / `lidarr` `.charana.dev` | private |
 | `llm.charana.dev` (open-webui) | private |
 | `ai.charana.dev` (hermes) | private |
+| `prashan-ai.charana.dev` (hermes-prashan) | private |
 | `beszel.charana.dev` | private |
 | `headlamp.charana.dev` | private |
 
