@@ -57,7 +57,7 @@ ingress:
 minio:
   enabled: false
 lokiCanary:
-  enabled: false
+  enabled: true
 chunksCache:
   enabled: false
 resultsCache:
