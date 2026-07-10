@@ -89,6 +89,7 @@ grafana:
     ingressClassName: traefik
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod
+      traefik.ingress.kubernetes.io/router.middlewares: kube-system-private-zone-only@kubernetescrd
     hosts:
       - grafana.charana.dev
     path: /
