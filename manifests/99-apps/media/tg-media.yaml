@@ -1,0 +1,257 @@
+# tg-media: on-demand Telegram media downloader for pavan-vps.
+# Runs as a sleep-infinity pod; exec into it to run CLI commands.
+#
+# First-time setup:
+#   1. Create secrets:   ./scripts/create-tg-media-secrets.sh
+#   2. Apply:             kubectl apply -f manifests/99-apps/media/tg-media.yaml
+#   3. Login (interactive): kubectl exec -it deploy/tg-media -n media -- python /app/tg-media.py login
+#   4. Download:          kubectl exec -it deploy/tg-media -n media -- python /app/tg-media.py download @SomeBot latest
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tg-media-script
+  namespace: media
+data:
+  tg-media.py: |
+    import argparse
+    import os
+    import shutil
+    import subprocess
+    import sys
+    import asyncio
+
+    from telethon import TelegramClient
+    from telethon.tl.types import MessageMediaDocument, MessageMediaPhoto
+
+    DOWNLOAD_DIR = "/data/downloads/telegram"
+    SESSION_PATH = "/data/session/tg-media"
+    MEDIA_UID = 1000
+    MEDIA_GID = 1000
+
+    JELLYFIN_HOST = os.environ.get("JELLYFIN_HOST", "http://jellyfin.media.svc.cluster.local:8096")
+    JELLYFIN_API_KEY = os.environ.get("JELLYFIN_API_KEY", "")
+
+    def get_client():
+        api_id = os.environ.get("TELEGRAM_API_ID")
+        api_hash = os.environ.get("TELEGRAM_API_HASH")
+        if not api_id or not api_hash:
+            print("Error: TELEGRAM_API_ID and TELEGRAM_API_HASH must be set")
+            sys.exit(1)
+        return TelegramClient(SESSION_PATH, int(api_id), api_hash)
+
+    def progress_callback(current, total):
+        pct = (current / total * 100) if total else 0
+        sys.stdout.write(f"\r  Downloaded {current:,} / {total:,} bytes ({pct:.1f}%)")
+        sys.stdout.flush()
+
+    def fix_perms(path):
+        """chown -R 1000:1000 and chmod to media-stack conventions."""
+        if not os.path.exists(path):
+            return
+        for root, dirs, files in os.walk(path):
+            os.chown(root, MEDIA_UID, MEDIA_GID)
+            os.chmod(root, 0o775)
+            for f in files:
+                fp = os.path.join(root, f)
+                os.chown(fp, MEDIA_UID, MEDIA_GID)
+                os.chmod(fp, 0o664)
+
+    def jellyfin_refresh():
+        """Trigger a full library scan via Jellyfin API."""
+        import urllib.request
+        url = f"{JELLYFIN_HOST}/Library/Refresh?ApiKey={JELLYFIN_API_KEY}"
+        req = urllib.request.Request(url, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                if resp.status == 204:
+                    print("  Jellyfin library scan triggered")
+                else:
+                    print(f"  Jellyfin refresh returned {resp.status}")
+        except Exception as e:
+            print(f"  Jellyfin refresh failed: {e}")
+
+    async def cmd_login():
+        client = get_client()
+        await client.start()
+        me = await client.get_me()
+        print(f"\nLogged in as: {me.first_name} (@{me.username})")
+        await client.disconnect()
+
+    async def cmd_chats():
+        client = get_client()
+        await client.connect()
+        if not await client.is_user_authorized():
+            print("Not logged in. Run 'login' first.")
+            return
+        print(f"{'ID':>14}  {'Type':<6}  {'Name'}")
+        print("-" * 50)
+        async for d in client.iter_dialogs(limit=50):
+            entity_type = "bot" if d.entity.bot else "user" if hasattr(d.entity, "username") else "chat"
+            name = d.name or "(unknown)"
+            print(f"{d.id:>14}  {entity_type:<6}  {name}")
+        await client.disconnect()
+
+    async def cmd_recent(chat, limit):
+        client = get_client()
+        await client.connect()
+        if not await client.is_user_authorized():
+            print("Not logged in. Run 'login' first.")
+            return
+        print(f"Recent messages from: {chat}\n")
+        msgs = await client.get_messages(chat, limit=limit)
+        for m in reversed(msgs):
+            has_media = "yes" if m.media else "no "
+            date = m.date.strftime("%Y-%m-%d %H:%M") if m.date else "?"
+            text = (m.text or "")[:60].replace("\n", " ")
+            print(f"  [{m.id:>6}]  {date}  media={has_media}  {text}")
+        await client.disconnect()
+
+    async def cmd_download(chat, target):
+        client = get_client()
+        await client.connect()
+        if not await client.is_user_authorized():
+            print("Not logged in. Run 'login' first.")
+            return
+
+        os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+        if target == "latest":
+            msgs = await client.get_messages(chat, limit=1)
+            if not msgs:
+                print("No messages found")
+                return
+            msg = msgs[0]
+            print(f"Latest message [{msg.id}] from {chat}")
+        else:
+            msg_id = int(target)
+            msg = await client.get_messages(chat, ids=msg_id)
+            if not msg:
+                print(f"Message {msg_id} not found")
+                return
+            print(f"Message [{msg.id}] from {chat}")
+
+        if not msg.media:
+            print("  No media attached to this message")
+            return
+
+        print(f"  Downloading to {DOWNLOAD_DIR}/ ...")
+        path = await client.download_media(msg, file=DOWNLOAD_DIR, progress_callback=progress_callback)
+        print()  # newline after progress bar
+
+        if path:
+            print(f"  Saved: {path}")
+            fix_perms(path)
+            print("  Fixed permissions (1000:1000, 0664/0775)")
+            if JELLYFIN_API_KEY:
+                jellyfin_refresh()
+            else:
+                print("  Skipped Jellyfin refresh (no API key)")
+        else:
+            print("  Download returned no path")
+
+        await client.disconnect()
+
+    async def cmd_refresh():
+        if not JELLYFIN_API_KEY:
+            print("No JELLYFIN_API_KEY set")
+            return
+        jellyfin_refresh()
+
+    def main():
+        parser = argparse.ArgumentParser(prog="tg-media", description="Telegram media downloader")
+        sub = parser.add_subparsers(dest="command", required=True)
+
+        sub.add_parser("login", help="Interactive Telegram login (first time only)")
+
+        sub.add_parser("chats", help="List recent chats")
+
+        p_recent = sub.add_parser("recent", help="Show recent messages from a chat")
+        p_recent.add_argument("chat", help="Chat username, ID, or phone")
+        p_recent.add_argument("-n", "--limit", type=int, default=20, help="Number of messages")
+
+        p_dl = sub.add_parser("download", help="Download media from a message")
+        p_dl.add_argument("chat", help="Chat username, ID, or phone")
+        p_dl.add_argument("target", help="Message ID or 'latest'")
+
+        sub.add_parser("refresh", help="Trigger Jellyfin library scan")
+
+        args = parser.parse_args()
+
+        if args.command == "login":
+            asyncio.run(cmd_login())
+        elif args.command == "chats":
+            asyncio.run(cmd_chats())
+        elif args.command == "recent":
+            asyncio.run(cmd_recent(args.chat, args.limit))
+        elif args.command == "download":
+            asyncio.run(cmd_download(args.chat, args.target))
+        elif args.command == "refresh":
+            asyncio.run(cmd_refresh())
+
+    if __name__ == "__main__":
+        main()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tg-media
+  namespace: media
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tg-media
+  template:
+    metadata:
+      labels:
+        app: tg-media
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: pavan-vps
+      containers:
+      - name: tg-media
+        image: python:3.12-slim
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          pip install --quiet telethon && sleep infinity
+        env:
+        - name: TELEGRAM_API_ID
+          valueFrom:
+            secretKeyRef:
+              name: tg-media-secrets
+              key: TELEGRAM_API_ID
+        - name: TELEGRAM_API_HASH
+          valueFrom:
+            secretKeyRef:
+              name: tg-media-secrets
+              key: TELEGRAM_API_HASH
+        - name: JELLYFIN_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: tg-media-secrets
+              key: JELLYFIN_API_KEY
+        - name: JELLYFIN_HOST
+          value: "http://jellyfin.media.svc.cluster.local:8096"
+        volumeMounts:
+        - name: script
+          mountPath: /app/tg-media.py
+          subPath: tg-media.py
+        - name: downloads
+          mountPath: /data/downloads/telegram
+        - name: session
+          mountPath: /data/session
+        workingDir: /app
+      volumes:
+      - name: script
+        configMap:
+          name: tg-media-script
+      - name: downloads
+        hostPath:
+          path: /mnt/data/media/downloads/telegram
+          type: DirectoryOrCreate
+      - name: session
+        hostPath:
+          path: /mnt/data/media/tg-media-session
+          type: DirectoryOrCreate
