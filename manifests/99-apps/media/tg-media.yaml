@@ -78,15 +78,15 @@ data:
         print(f"\nLogged in as: {me.first_name} (@{me.username})")
         await client.disconnect()
 
-    async def cmd_chats():
+    async def cmd_chats(limit):
         client = get_client()
         await client.connect()
         if not await client.is_user_authorized():
             print("Not logged in. Run 'login' first.")
             return
-        print(f"{'ID':>14}  {'Type':<6}  {'Name'}")
+        print(f"{'ID':>14}  {'Type':<7}  {'Name'}")
         print("-" * 50)
-        async for d in client.iter_dialogs(limit=50):
+        async for d in client.iter_dialogs(limit=limit):
             entity_type = "bot" if getattr(d.entity, "bot", False) else "channel" if hasattr(d.entity, "title") else "user"
             name = d.name or "(unknown)"
             print(f"{d.id:>14}  {entity_type:<6}  {name}")
@@ -115,6 +115,29 @@ data:
             return
 
         os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+        # Download all media after a given message ID
+        if target.startswith("after-"):
+            after_id = int(target.split("-", 1)[1])
+            print(f"Downloading all media after message {after_id} from {chat}")
+            count = 0
+            async for msg in client.iter_messages(chat, min_id=after_id):
+                if not msg.media:
+                    continue
+                print(f"\n  [{msg.id}] Downloading...")
+                path = await client.download_media(msg, file=DOWNLOAD_DIR, progress_callback=progress_callback)
+                print()
+                if path:
+                    fix_perms(path)
+                    count += 1
+                    print(f"  Saved: {path}")
+                else:
+                    print(f"  [{msg.id}] No downloadable media")
+            print(f"\nDownloaded {count} file(s)")
+            if count > 0 and JELLYFIN_API_KEY:
+                jellyfin_refresh()
+            await client.disconnect()
+            return
 
         if target == "latest":
             msgs = await client.get_messages(chat, limit=1)
@@ -164,7 +187,8 @@ data:
 
         sub.add_parser("login", help="Interactive Telegram login (first time only)")
 
-        sub.add_parser("chats", help="List recent chats")
+        p_chats = sub.add_parser("chats", help="List recent chats")
+        p_chats.add_argument("-n", "--limit", type=int, default=50, help="Number of chats")
 
         p_recent = sub.add_parser("recent", help="Show recent messages from a chat")
         p_recent.add_argument("chat", help="Chat username, ID, or phone")
@@ -172,7 +196,7 @@ data:
 
         p_dl = sub.add_parser("download", help="Download media from a message")
         p_dl.add_argument("chat", help="Chat username, ID, or phone")
-        p_dl.add_argument("target", help="Message ID or 'latest'")
+        p_dl.add_argument("target", help="Message ID, 'latest', or 'after-<id>' to download all media after a message")
 
         sub.add_parser("refresh", help="Trigger Jellyfin library scan")
 
@@ -181,7 +205,7 @@ data:
         if args.command == "login":
             asyncio.run(cmd_login())
         elif args.command == "chats":
-            asyncio.run(cmd_chats())
+            asyncio.run(cmd_chats(args.limit))
         elif args.command == "recent":
             asyncio.run(cmd_recent(args.chat, args.limit))
         elif args.command == "download":
