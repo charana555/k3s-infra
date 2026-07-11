@@ -87,7 +87,7 @@ data:
         print(f"{'ID':>14}  {'Type':<6}  {'Name'}")
         print("-" * 50)
         async for d in client.iter_dialogs(limit=50):
-            entity_type = "bot" if d.entity.bot else "user" if hasattr(d.entity, "username") else "chat"
+            entity_type = "bot" if getattr(d.entity, "bot", False) else "channel" if hasattr(d.entity, "title") else "user"
             name = d.name or "(unknown)"
             print(f"{d.id:>14}  {entity_type:<6}  {name}")
         await client.disconnect()
