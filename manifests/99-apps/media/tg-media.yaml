@@ -88,11 +88,12 @@ data:
             raise ValueError(f"Cannot find entity for '{chat}'. Try /chats to get the @username instead.")
 
     async def do_chats(client, limit):
-        lines = [f"{'ID':>14}  {'Type':<7}  {'Name'}", "-" * 50]
+        lines = [f"{'ID':>14}  {'Type':<7}  {'Username':<20}  {'Name'}", "-" * 70]
         async for d in client.iter_dialogs(limit=limit):
             entity_type = "bot" if getattr(d.entity, "bot", False) else "channel" if hasattr(d.entity, "title") else "user"
+            username = f"@{d.entity.username}" if getattr(d.entity, "username", None) else "-"
             name = d.name or "(unknown)"
-            lines.append(f"{d.id:>14}  {entity_type:<7}  {name}")
+            lines.append(f"{d.id:>14}  {entity_type:<7}  {username:<20}  {name}")
         return "\n".join(lines)
 
     async def do_recent(client, chat, limit):
