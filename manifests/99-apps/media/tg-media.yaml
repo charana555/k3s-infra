@@ -17,7 +17,9 @@ metadata:
 data:
   tg-media.py: |
     import argparse
+    import glob
     import os
+    import re
     import sys
     import asyncio
 
@@ -31,6 +33,7 @@ data:
 
     JELLYFIN_HOST = os.environ.get("JELLYFIN_HOST", "http://jellyfin.media.svc.cluster.local:8096")
     JELLYFIN_API_KEY = os.environ.get("JELLYFIN_API_KEY", "")
+    TV_DIR = "/data/tv"
 
     def get_credentials():
         api_id = os.environ.get("TELEGRAM_API_ID")
@@ -65,6 +68,79 @@ data:
                 return resp.status == 204
         except Exception:
             return False
+
+    # Pattern: Show_Name_Season_N_Episode_M_...ext
+    # Handles leading underscore, (1) duplicates, @tags, etc.
+    RENAME_RE = re.compile(
+        r"_*(.+?)_Season_(\d+)_Episode_(\d+).*",
+        re.IGNORECASE
+    )
+
+    def do_rename(move=False, dry_run=False, reply=None):
+        async def out(msg):
+            if reply:
+                await reply(msg)
+            else:
+                print(msg)
+
+        renamed = 0
+        skipped = 0
+        moved = 0
+
+        for f in sorted(os.listdir(DOWNLOAD_DIR)):
+            fpath = os.path.join(DOWNLOAD_DIR, f)
+            if not os.path.isfile(fpath):
+                continue
+
+            name, ext = os.path.splitext(f)
+            m = RENAME_RE.match(name)
+            if not m:
+                skipped += 1
+                continue
+
+            show = m.group(1).replace("_", " ").strip()
+            season = int(m.group(2))
+            episode = int(m.group(3))
+            new_name = f"{show} - S{season:02d}E{episode:02d}{ext}"
+
+            if move:
+                dest_dir = os.path.join(TV_DIR, show, f"Season {season:02d}")
+                dest = os.path.join(dest_dir, new_name)
+            else:
+                dest = os.path.join(DOWNLOAD_DIR, new_name)
+
+            if os.path.exists(dest):
+                skipped += 1
+                await out(f"  skip (exists): {new_name}")
+                continue
+
+            if dry_run:
+                await out(f"  would rename: {f} -> {new_name}")
+                renamed += 1
+                continue
+
+            try:
+                if move:
+                    os.makedirs(dest_dir, exist_ok=True)
+                    shutil.move(fpath, dest)
+                    fix_perms(dest)
+                    moved += 1
+                    await out(f"  moved: {new_name} -> {show}/Season {season:02d}/")
+                else:
+                    os.rename(fpath, dest)
+                    fix_perms(dest)
+                    renamed += 1
+                    await out(f"  renamed: {new_name}")
+            except Exception as e:
+                await out(f"  error: {f} -> {e}")
+
+        action = "moved" if move else "renamed"
+        count = moved if move else renamed
+        await out(f"\n{count} file(s) {action}, {skipped} skipped")
+
+        if count > 0 and not dry_run and JELLYFIN_API_KEY:
+            jellyfin_refresh()
+            await out("Jellyfin scan triggered")
 
     # --- Core functions (shared by CLI and bot) ---
 
@@ -271,6 +347,7 @@ data:
                         "/chats [limit] - List recent chats\n"
                         "/recent <chat> [limit] - Show recent messages\n"
                         "/download <chat> <id|latest|after-id> - Download media\n"
+                        "/rename [--move] - Rename to Jellyfin format (use --move to also move to TV library)\n"
                         "/refresh - Trigger Jellyfin scan\n"
                         "/status - Show bot status"
                     )
@@ -296,6 +373,9 @@ data:
                         await do_download(user_client, args[0], args[1], reply=event.reply)
                     finally:
                         download_busy = False
+                elif cmd == "/rename":
+                    move = "--move" in args
+                    await do_rename(move=move, reply=event.reply)
                 elif cmd == "/refresh":
                     if jellyfin_refresh():
                         await event.reply("Jellyfin scan triggered")
@@ -336,6 +416,10 @@ data:
 
         sub.add_parser("refresh", help="Trigger Jellyfin library scan")
 
+        p_rename = sub.add_parser("rename", help="Rename downloaded files to Jellyfin format")
+        p_rename.add_argument("--move", action="store_true", help="Move to TV library (Show/Season NN/)")
+        p_rename.add_argument("--dry-run", action="store_true", help="Show what would happen without doing it")
+
         args = parser.parse_args()
 
         if args.command == "login":
@@ -350,6 +434,8 @@ data:
             asyncio.run(cmd_download(args.chat, args.target))
         elif args.command == "refresh":
             asyncio.run(cmd_refresh())
+        elif args.command == "rename":
+            do_rename(move=args.move, dry_run=args.dry_run)
 
     if __name__ == "__main__":
         main()
@@ -412,6 +498,8 @@ spec:
           subPath: tg-media.py
         - name: downloads
           mountPath: /data/downloads/telegram
+        - name: tv
+          mountPath: /data/tv
         - name: session
           mountPath: /data/session
         workingDir: /app
@@ -422,6 +510,10 @@ spec:
       - name: downloads
         hostPath:
           path: /mnt/data/media/downloads/telegram
+          type: DirectoryOrCreate
+      - name: tv
+        hostPath:
+          path: /mnt/data/media/tv
           type: DirectoryOrCreate
       - name: session
         hostPath:
