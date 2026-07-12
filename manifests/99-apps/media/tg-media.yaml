@@ -76,7 +76,7 @@ data:
         re.IGNORECASE
     )
 
-    def do_rename(move=False, dry_run=False, reply=None):
+    async def do_rename(move=False, dry_run=False, reply=None):
         async def out(msg):
             if reply:
                 await reply(msg)
@@ -435,7 +435,7 @@ data:
         elif args.command == "refresh":
             asyncio.run(cmd_refresh())
         elif args.command == "rename":
-            do_rename(move=args.move, dry_run=args.dry_run)
+            asyncio.run(do_rename(move=args.move, dry_run=args.dry_run))
 
     if __name__ == "__main__":
         main()
