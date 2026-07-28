@@ -1,0 +1,26 @@
+[Unit]
+Description=rclone FUSE mount: Google Drive media (gdrive:media -> /mnt/gdrive/media)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/rclone mount gdrive:media /mnt/gdrive/media \
+  --config /etc/rclone/rclone.conf \
+  --allow-other \
+  --uid 1000 \
+  --gid 1000 \
+  --umask 002 \
+  --vfs-cache-mode full \
+  --vfs-cache-max-size 50G \
+  --cache-dir /mnt/data/rclone-cache \
+  --dir-cache-time 1000h \
+  --buffer-size 32M \
+  --drive-chunk-size 64M \
+  --tpslimit 8
+ExecStop=/bin/fusermount -uz /mnt/gdrive/media
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

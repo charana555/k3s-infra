@@ -324,6 +324,76 @@ curl -I https://photos.charana.dev    # 200
 curl -I https://charana.dev           # 200
 ```
 
+## Google Drive Media Storage
+
+Movies and TV shows are stored on Google Drive (5TB personal storage) and streamed to Jellyfin via an rclone FUSE mount on `pavan-vps`. Downloads, music, Immich photos, and Nextcloud data stay on local disk.
+
+```text
+Google Drive (gdrive:media/)
+    │  rclone mount (FUSE, vfs-cache full)
+    ▼
+/mnt/gdrive/media/{movies,tv}  ←  systemd service on pavan-vps
+    │  hostPath (same pattern as local volumes)
+    ▼
+Jellyfin / Radarr / Sonarr pods
+```
+
+Downloads remain at `/mnt/data/media/downloads` (local disk). qBittorrent downloads to fast local storage, then Radarr/Sonarr move completed files to the gdrive mount. The VFS cache (`--vfs-cache-mode full`) makes writes appear instantly - rclone uploads in the background.
+
+### Setup
+
+```bash
+# Run on pavan-vps (the node hosting media pods)
+./scripts/setup-rclone-gdrive.sh
+
+# Create folder structure on Google Drive
+rclone mkdir gdrive:media/movies
+rclone mkdir gdrive:media/tv
+
+# Upload existing media (run from the node that has the files)
+rclone copy /path/to/movies gdrive:media/movies -P
+rclone copy /path/to/tv gdrive:media/tv -P
+# 750GB/day upload limit on personal Google Drive
+
+# Start the mount
+sudo systemctl enable --now rclone-gdrive
+
+# Verify
+systemctl status rclone-gdrive
+ls /mnt/gdrive/media/
+
+# Apply updated k8s manifests (movies/tv now point to gdrive mount)
+kubectl apply -f manifests/99-apps/media/jellyfin.yaml
+kubectl apply -f manifests/99-apps/media/radarr.yaml
+kubectl apply -f manifests/99-apps/media/sonarr.yaml
+```
+
+### Key rclone flags
+
+| Flag | Purpose |
+|------|---------|
+| `--vfs-cache-mode full` | Downloads chunks locally so Jellyfin can seek/scrub |
+| `--vfs-cache-max-size 50G` | Caps local VFS cache (on `/mnt/data/rclone-cache`) |
+| `--dir-cache-time 1000h` | Long directory cache to reduce API calls during library scans |
+| `--tpslimit 8` | Rate-limit Google Drive API calls (avoid bans on personal drives) |
+| `--allow-other` | Let k8s pods read the FUSE mount |
+
+### Caveats
+
+- **API limits**: Personal Google Drive has strict rate limits. Jellyfin library scans are API-heavy. `--tpslimit 8` + `--dir-cache-time 1000h` mitigate this. If bans occur, consider a Workspace Shared Drive.
+- **Upload limit**: 750GB/day on personal drives. Large libraries may take multiple days to upload.
+- **Boot order**: The rclone mount is a systemd service, not a k8s resource. If pods start before the mount is ready, restart them after the mount comes up: `kubectl rollout restart deploy jellyfin radarr sonarr -n media`.
+- **VFS cache disk**: 50GB cache lives at `/mnt/data/rclone-cache`. Adjust `--vfs-cache-max-size` in the systemd unit if disk space is tight.
+
+### Files
+
+| File | Description |
+|------|-------------|
+| `systemd/rclone-gdrive.service` | systemd unit for the rclone FUSE mount |
+| `scripts/setup-rclone-gdrive.sh` | Installs rclone, configures remote, installs systemd unit |
+
+> The rclone config (`/etc/rclone/rclone.conf`) contains OAuth tokens and is NOT tracked in this repo.
+
 ## Security Notes
 
 - Never commit secrets to this repo

@@ -50,11 +50,11 @@ spec:
           type: DirectoryOrCreate
       - name: movies
         hostPath:
-          path: /mnt/data/media/movies
+          path: /mnt/gdrive/media/movies
           type: DirectoryOrCreate
       - name: tv
         hostPath:
-          path: /mnt/data/media/tv
+          path: /mnt/gdrive/media/tv
           type: DirectoryOrCreate
       - name: music
         hostPath:
