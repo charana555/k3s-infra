@@ -99,7 +99,15 @@ data:
 
         return None
 
-    def auto_move(filepath):
+    def build_tv_path(show, season, category=None):
+        """Build destination directory for a show. category='anime' or 'series' adds a subdirectory."""
+        parts = [TV_DIR]
+        if category:
+            parts.append(category.capitalize())
+        parts.extend([show, f"Season {season:02d}"])
+        return os.path.join(*parts)
+
+    def auto_move(filepath, category=None):
         """Check filename, rename if needed, move to TV library. Returns (moved: bool, msg: str)."""
         filename = os.path.basename(filepath)
         parsed = parse_filename(filename)
@@ -108,8 +116,9 @@ data:
             return False, f"skip (no pattern): {filename}"
 
         show, season, episode, new_name = parsed
-        dest_dir = os.path.join(TV_DIR, show, f"Season {season:02d}")
+        dest_dir = build_tv_path(show, season, category)
         dest = os.path.join(dest_dir, new_name)
+        label = f"{category + '/' if category else ''}{show}/Season {season:02d}/"
 
         if os.path.exists(dest):
             return False, f"skip (exists): {new_name}"
@@ -118,11 +127,11 @@ data:
             os.makedirs(dest_dir, exist_ok=True)
             shutil.move(filepath, dest)
             fix_perms(dest)
-            return True, f"moved: {new_name} -> {show}/Season {season:02d}/"
+            return True, f"moved: {new_name} -> {label}"
         except Exception as e:
             return False, f"error: {filename} -> {e}"
 
-    async def do_rename(move=False, dry_run=False, reply=None):
+    async def do_rename(move=False, dry_run=False, reply=None, category=None):
         async def out(msg):
             if reply:
                 await reply(msg)
@@ -146,7 +155,7 @@ data:
             show, season, episode, new_name = parsed
 
             if move:
-                dest_dir = os.path.join(TV_DIR, show, f"Season {season:02d}")
+                dest_dir = build_tv_path(show, season, category)
                 dest = os.path.join(dest_dir, new_name)
             else:
                 dest = os.path.join(DOWNLOAD_DIR, new_name)
@@ -167,7 +176,8 @@ data:
                     shutil.move(fpath, dest)
                     fix_perms(dest)
                     moved += 1
-                    await out(f"  moved: {new_name} -> {show}/Season {season:02d}/")
+                    label = f"{category + '/' if category else ''}{show}/Season {season:02d}/"
+                    await out(f"  moved: {new_name} -> {label}")
                 else:
                     os.rename(fpath, dest)
                     fix_perms(dest)
@@ -223,7 +233,7 @@ data:
             lines.append(f"  [{m.id:>6}]  {date}  media={has_media}  {text}")
         return "\n".join(lines)
 
-    async def do_download(client, chat, target, reply=None, show_progress=False):
+    async def do_download(client, chat, target, reply=None, show_progress=False, category=None):
         async def out(msg):
             if reply:
                 await reply(msg)
@@ -248,6 +258,8 @@ data:
                 return
 
             await out(f"Found {len(messages)} media files. Downloading {MAX_PARALLEL} at a time...")
+            if category:
+                await out(f"Category: {category}")
 
             sem = asyncio.Semaphore(MAX_PARALLEL)
             results = {"moved": 0, "skipped": 0}
@@ -258,7 +270,7 @@ data:
                     path = await client.download_media(msg, file=DOWNLOAD_DIR)
                     if path:
                         fix_perms(path)
-                        moved, msg_text = auto_move(path)
+                        moved, msg_text = auto_move(path, category)
                         await out(f"[{msg.id}] {msg_text}")
                         if moved:
                             results["moved"] += 1
@@ -300,7 +312,7 @@ data:
         path = await client.download_media(msg, file=DOWNLOAD_DIR)
         if path:
             fix_perms(path)
-            moved, msg_text = auto_move(path)
+            moved, msg_text = auto_move(path, category)
             await out(msg_text)
             if moved and JELLYFIN_API_KEY:
                 jellyfin_refresh()
@@ -338,14 +350,14 @@ data:
         print(await do_recent(client, chat, limit))
         await client.disconnect()
 
-    async def cmd_download(chat, target):
+    async def cmd_download(chat, target, category=None):
         api_id, api_hash = get_credentials()
         client = TelegramClient(SESSION_PATH, api_id, api_hash)
         await client.connect()
         if not await client.is_user_authorized():
             print("Not logged in. Run 'login' first.")
             return
-        await do_download(client, chat, target, show_progress=True)
+        await do_download(client, chat, target, show_progress=True, category=category)
         await client.disconnect()
 
     async def cmd_refresh():
@@ -407,9 +419,10 @@ data:
                         "Commands:\n"
                         "/chats [limit] - List recent chats\n"
                         "/recent <chat> [limit] - Show recent messages\n"
-                        "/download <chat> <id|latest|after-id> - Download + auto-move to TV library\n"
-                        "  (downloads 3 files at a time, oldest first, renames if needed)\n"
-                        "/rename [--move] - Manually rename/move files in download dir\n"
+                        "/download <chat> <id|latest|after-id> [anime|series] - Download + auto-move\n"
+                        "  (3 files at a time, oldest first, renames if needed)\n"
+                        "  (optional category: anime or series, subdirectories under TV library)\n"
+                        "/rename [--move] [anime|series] - Manually rename/move files in download dir\n"
                         "/refresh - Trigger Jellyfin scan\n"
                         "/status - Show bot status"
                     )
@@ -425,19 +438,26 @@ data:
                     await event.reply((await do_recent(user_client, chat, limit))[:4096])
                 elif cmd == "/download":
                     if len(args) < 2:
-                        await event.reply("Usage: /download <chat> <id|latest|after-id>")
+                        await event.reply("Usage: /download <chat> <id|latest|after-id> [anime|series]")
                         return
                     if download_busy:
                         await event.reply("Download in progress, please wait.")
                         return
+                    category = None
+                    if len(args) >= 3 and args[2].lower() in ("anime", "series"):
+                        category = args[2].lower()
                     download_busy = True
                     try:
-                        await do_download(user_client, args[0], args[1], reply=event.reply)
+                        await do_download(user_client, args[0], args[1], reply=event.reply, category=category)
                     finally:
                         download_busy = False
                 elif cmd == "/rename":
                     move = "--move" in args
-                    await do_rename(move=move, reply=event.reply)
+                    category = None
+                    for a in args:
+                        if a.lower() in ("anime", "series"):
+                            category = a.lower()
+                    await do_rename(move=move, reply=event.reply, category=category)
                 elif cmd == "/refresh":
                     if jellyfin_refresh():
                         await event.reply("Jellyfin scan triggered")
@@ -477,12 +497,14 @@ data:
         p_dl = sub.add_parser("download", help="Download media from a message")
         p_dl.add_argument("chat", help="Chat username, ID, or phone")
         p_dl.add_argument("target", help="Message ID, 'latest', or 'after-<id>'")
+        p_dl.add_argument("--category", choices=["anime", "series"], help="Subdirectory under TV library")
 
         sub.add_parser("refresh", help="Trigger Jellyfin library scan")
 
         p_rename = sub.add_parser("rename", help="Rename downloaded files to Jellyfin format")
         p_rename.add_argument("--move", action="store_true", help="Move to TV library (Show/Season NN/)")
         p_rename.add_argument("--dry-run", action="store_true", help="Show what would happen without doing it")
+        p_rename.add_argument("--category", choices=["anime", "series"], help="Subdirectory under TV library")
 
         args = parser.parse_args()
 
@@ -495,11 +517,11 @@ data:
         elif args.command == "recent":
             asyncio.run(cmd_recent(args.chat, args.limit))
         elif args.command == "download":
-            asyncio.run(cmd_download(args.chat, args.target))
+            asyncio.run(cmd_download(args.chat, args.target, category=args.category))
         elif args.command == "refresh":
             asyncio.run(cmd_refresh())
         elif args.command == "rename":
-            asyncio.run(do_rename(move=args.move, dry_run=args.dry_run))
+            asyncio.run(do_rename(move=args.move, dry_run=args.dry_run, category=args.category))
 
     if __name__ == "__main__":
         main()
