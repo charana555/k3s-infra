@@ -514,7 +514,7 @@ spec:
           type: DirectoryOrCreate
       - name: tv
         hostPath:
-          path: /mnt/data/media/tv
+          path: /mnt/gdrive/media/tv
           type: DirectoryOrCreate
       - name: session
         hostPath:

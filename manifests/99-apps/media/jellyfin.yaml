@@ -37,6 +37,12 @@ spec:
         - name: tv
           mountPath: /data/tv
           readOnly: true
+        - name: local-movies
+          mountPath: /data/local-movies
+          readOnly: true
+        - name: local-tv
+          mountPath: /data/local-tv
+          readOnly: true
         - name: downloads
           mountPath: /data/downloads
           readOnly: true
@@ -55,6 +61,14 @@ spec:
       - name: tv
         hostPath:
           path: /mnt/gdrive/media/tv
+          type: DirectoryOrCreate
+      - name: local-movies
+        hostPath:
+          path: /mnt/data/media/movies
+          type: DirectoryOrCreate
+      - name: local-tv
+        hostPath:
+          path: /mnt/data/media/tv
           type: DirectoryOrCreate
       - name: music
         hostPath:
