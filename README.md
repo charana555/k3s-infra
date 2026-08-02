@@ -213,6 +213,7 @@ Non-Tailscale clients hitting a private service get a **403 Forbidden** from Tra
 | `prashan-ai.charana.dev` (hermes-prashan) | private |
 | `beszel.charana.dev` | private |
 | `headlamp.charana.dev` | private |
+| `pdf.charana.dev` (stirling-pdf) | private |
 
 ### How it works
 
