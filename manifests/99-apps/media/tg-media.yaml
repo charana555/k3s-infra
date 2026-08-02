@@ -35,6 +35,7 @@ data:
     JELLYFIN_HOST = os.environ.get("JELLYFIN_HOST", "http://jellyfin.media.svc.cluster.local:8096")
     JELLYFIN_API_KEY = os.environ.get("JELLYFIN_API_KEY", "")
     TV_DIR = "/data/tv"
+    MOVIES_DIR = "/data/movies"
 
     def get_credentials():
         api_id = os.environ.get("TELEGRAM_API_ID")
@@ -108,8 +109,23 @@ data:
         return os.path.join(*parts)
 
     def auto_move(filepath, category=None):
-        """Check filename, rename if needed, move to TV library. Returns (moved: bool, msg: str)."""
+        """Check filename, rename if needed, move to library. Returns (moved: bool, msg: str)."""
         filename = os.path.basename(filepath)
+
+        # Movies: no pattern matching, just move to movies folder as-is
+        if category == "movie":
+            dest = os.path.join(MOVIES_DIR, filename)
+            if os.path.exists(dest):
+                return False, f"skip (exists): {filename}"
+            try:
+                os.makedirs(MOVIES_DIR, exist_ok=True)
+                shutil.move(filepath, dest)
+                fix_perms(dest)
+                return True, f"moved: {filename} -> Movies/"
+            except Exception as e:
+                return False, f"error: {filename} -> {e}"
+
+        # TV: parse show/season/episode from filename
         parsed = parse_filename(filename)
 
         if not parsed:
@@ -147,6 +163,31 @@ data:
             if not os.path.isfile(fpath):
                 continue
 
+            # Movies: no rename, just move
+            if category == "movie":
+                if not move:
+                    skipped += 1
+                    continue
+                dest = os.path.join(MOVIES_DIR, f)
+                if os.path.exists(dest):
+                    skipped += 1
+                    await out(f"  skip (exists): {f}")
+                    continue
+                if dry_run:
+                    await out(f"  would move: {f} -> Movies/")
+                    moved += 1
+                    continue
+                try:
+                    os.makedirs(MOVIES_DIR, exist_ok=True)
+                    shutil.move(fpath, dest)
+                    fix_perms(dest)
+                    moved += 1
+                    await out(f"  moved: {f} -> Movies/")
+                except Exception as e:
+                    await out(f"  error: {f} -> {e}")
+                continue
+
+            # TV: parse show/season/episode
             parsed = parse_filename(f)
             if not parsed:
                 skipped += 1
@@ -419,10 +460,13 @@ data:
                         "Commands:\n"
                         "/chats [limit] - List recent chats\n"
                         "/recent <chat> [limit] - Show recent messages\n"
-                        "/download <chat> <id|latest|after-id> [anime|series] - Download + auto-move\n"
-                        "  (3 files at a time, oldest first, renames if needed)\n"
-                        "  (optional category: anime or series, subdirectories under TV library)\n"
-                        "/rename [--move] [anime|series] - Manually rename/move files in download dir\n"
+                        "/download <chat> <id|latest|after-id> [anime|series|movie]\n"
+                        "  Download + auto-move (3 at a time, oldest first)\n"
+                        "  anime  -> /data/tv/Anime/{Show}/Season NN/\n"
+                        "  series -> /data/tv/Series/{Show}/Season NN/\n"
+                        "  movie  -> /data/movies/ (no rename, moved as-is)\n"
+                        "  (none) -> /data/tv/{Show}/Season NN/\n"
+                        "/rename [--move] [anime|series|movie] - Manually process download dir\n"
                         "/refresh - Trigger Jellyfin scan\n"
                         "/status - Show bot status"
                     )
@@ -438,13 +482,13 @@ data:
                     await event.reply((await do_recent(user_client, chat, limit))[:4096])
                 elif cmd == "/download":
                     if len(args) < 2:
-                        await event.reply("Usage: /download <chat> <id|latest|after-id> [anime|series]")
+                        await event.reply("Usage: /download <chat> <id|latest|after-id> [anime|series|movie]")
                         return
                     if download_busy:
                         await event.reply("Download in progress, please wait.")
                         return
                     category = None
-                    if len(args) >= 3 and args[2].lower() in ("anime", "series"):
+                    if len(args) >= 3 and args[2].lower() in ("anime", "series", "movie"):
                         category = args[2].lower()
                     download_busy = True
                     try:
@@ -455,7 +499,7 @@ data:
                     move = "--move" in args
                     category = None
                     for a in args:
-                        if a.lower() in ("anime", "series"):
+                        if a.lower() in ("anime", "series", "movie"):
                             category = a.lower()
                     await do_rename(move=move, reply=event.reply, category=category)
                 elif cmd == "/refresh":
@@ -497,14 +541,14 @@ data:
         p_dl = sub.add_parser("download", help="Download media from a message")
         p_dl.add_argument("chat", help="Chat username, ID, or phone")
         p_dl.add_argument("target", help="Message ID, 'latest', or 'after-<id>'")
-        p_dl.add_argument("--category", choices=["anime", "series"], help="Subdirectory under TV library")
+        p_dl.add_argument("--category", choices=["anime", "series", "movie"], help="Library subdirectory")
 
         sub.add_parser("refresh", help="Trigger Jellyfin library scan")
 
         p_rename = sub.add_parser("rename", help="Rename downloaded files to Jellyfin format")
         p_rename.add_argument("--move", action="store_true", help="Move to TV library (Show/Season NN/)")
         p_rename.add_argument("--dry-run", action="store_true", help="Show what would happen without doing it")
-        p_rename.add_argument("--category", choices=["anime", "series"], help="Subdirectory under TV library")
+        p_rename.add_argument("--category", choices=["anime", "series", "movie"], help="Library subdirectory")
 
         args = parser.parse_args()
 
@@ -586,6 +630,8 @@ spec:
           mountPath: /data/downloads/telegram
         - name: tv
           mountPath: /data/tv
+        - name: movies
+          mountPath: /data/movies
         - name: session
           mountPath: /data/session
         workingDir: /app
@@ -600,6 +646,10 @@ spec:
       - name: tv
         hostPath:
           path: /mnt/gdrive/media/tv
+          type: DirectoryOrCreate
+      - name: movies
+        hostPath:
+          path: /mnt/gdrive/media/movies
           type: DirectoryOrCreate
       - name: session
         hostPath:
