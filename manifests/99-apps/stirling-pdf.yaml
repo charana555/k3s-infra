@@ -47,19 +47,25 @@ spec:
         volumeMounts:
         - name: configs
           mountPath: /configs
+        startupProbe:
+          httpGet:
+            path: /api/v1/info/status
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 12
         livenessProbe:
           httpGet:
-            path: /
+            path: /api/v1/info/status
             port: 8080
-          initialDelaySeconds: 60
           periodSeconds: 30
           timeoutSeconds: 10
           failureThreshold: 3
         readinessProbe:
           httpGet:
-            path: /
+            path: /api/v1/info/status
             port: 8080
-          initialDelaySeconds: 15
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
