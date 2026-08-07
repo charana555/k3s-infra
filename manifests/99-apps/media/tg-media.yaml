@@ -361,6 +361,65 @@ data:
         else:
             await out("Download failed")
 
+    def parse_gdrive_folder_id(url):
+        """Extract folder ID from Google Drive URL or return input if already an ID."""
+        m = re.search(r"/folders/([a-zA-Z0-9_-]+)", url)
+        if m:
+            return m.group(1)
+        if re.match(r"^[a-zA-Z0-9_-]{20,}$", url):
+            return url
+        return None
+
+    async def do_gdrive_download(url, category=None, reply=None):
+        async def out(msg):
+            if reply:
+                await reply(msg)
+            else:
+                print(msg)
+
+        folder_id = parse_gdrive_folder_id(url)
+        if not folder_id:
+            await out("Invalid Google Drive URL. Expected folder URL or ID.")
+            return
+
+        import tempfile
+        import subprocess
+
+        tmpdir = tempfile.mkdtemp(prefix="gdrive_", dir=DOWNLOAD_DIR)
+        await out(f"Downloading Google Drive folder: {folder_id}")
+        if category:
+            await out(f"Category: {category}")
+
+        proc = await asyncio.create_subprocess_exec(
+            "gdown", "--folder", folder_id, "-O", tmpdir,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await proc.communicate()
+        if proc.returncode != 0:
+            await out(f"gdown failed: {stdout.decode()[:500]}")
+            shutil.rmtree(tmpdir, ignore_errors=True)
+            return
+
+        # Walk downloaded files and auto-move each one
+        moved = 0
+        skipped = 0
+        for root, dirs, files in os.walk(tmpdir):
+            for f in sorted(files):
+                fpath = os.path.join(root, f)
+                ok, msg_text = auto_move(fpath, category)
+                await out(msg_text)
+                if ok:
+                    moved += 1
+                else:
+                    skipped += 1
+
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        await out(f"Done: {moved} moved, {skipped} skipped")
+        if moved > 0 and JELLYFIN_API_KEY:
+            jellyfin_refresh()
+            await out("Jellyfin scan triggered")
+
     # --- CLI commands ---
 
     async def cmd_login():
@@ -400,6 +459,10 @@ data:
             return
         await do_download(client, chat, target, show_progress=True, category=category)
         await client.disconnect()
+
+    async def cmd_gdrive(url, category=None):
+        os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+        await do_gdrive_download(url, category=category)
 
     async def cmd_refresh():
         if not JELLYFIN_API_KEY:
@@ -466,6 +529,8 @@ data:
                         "  series -> /data/tv/Series/{Show}/Season NN/\n"
                         "  movie  -> /data/movies/ (no rename, moved as-is)\n"
                         "  (none) -> /data/tv/{Show}/Season NN/\n"
+                        "/gdrive <url> [anime|series|movie]\n"
+                        "  Download public Google Drive folder + auto-move\n"
                         "/rename [--move] [anime|series|movie] - Manually process download dir\n"
                         "/refresh - Trigger Jellyfin scan\n"
                         "/status - Show bot status"
@@ -502,6 +567,23 @@ data:
                         if a.lower() in ("anime", "series", "movie"):
                             category = a.lower()
                     await do_rename(move=move, reply=event.reply, category=category)
+                elif cmd == "/gdrive":
+                    if not args:
+                        await event.reply("Usage: /gdrive <url> [anime|series|movie]")
+                        return
+                    if download_busy:
+                        await event.reply("Download in progress, please wait.")
+                        return
+                    url = args[0]
+                    category = None
+                    if len(args) >= 2 and args[1].lower() in ("anime", "series", "movie"):
+                        category = args[1].lower()
+                    download_busy = True
+                    try:
+                        os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+                        await do_gdrive_download(url, category=category, reply=event.reply)
+                    finally:
+                        download_busy = False
                 elif cmd == "/refresh":
                     if jellyfin_refresh():
                         await event.reply("Jellyfin scan triggered")
@@ -550,6 +632,10 @@ data:
         p_rename.add_argument("--dry-run", action="store_true", help="Show what would happen without doing it")
         p_rename.add_argument("--category", choices=["anime", "series", "movie"], help="Library subdirectory")
 
+        p_gdrive = sub.add_parser("gdrive", help="Download public Google Drive folder")
+        p_gdrive.add_argument("url", help="Google Drive folder URL or ID")
+        p_gdrive.add_argument("--category", choices=["anime", "series", "movie"], help="Library subdirectory")
+
         args = parser.parse_args()
 
         if args.command == "login":
@@ -566,6 +652,8 @@ data:
             asyncio.run(cmd_refresh())
         elif args.command == "rename":
             asyncio.run(do_rename(move=args.move, dry_run=args.dry_run, category=args.category))
+        elif args.command == "gdrive":
+            asyncio.run(cmd_gdrive(args.url, category=args.category))
 
     if __name__ == "__main__":
         main()
@@ -593,7 +681,7 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
         - |
-          pip install --quiet telethon && python /app/tg-media.py serve
+          pip install --quiet telethon gdown && python /app/tg-media.py serve
         env:
         - name: TELEGRAM_API_ID
           valueFrom:
