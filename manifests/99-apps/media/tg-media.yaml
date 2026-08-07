@@ -420,6 +420,52 @@ data:
             jellyfin_refresh()
             await out("Jellyfin scan triggered")
 
+    async def do_direct_download(url, category=None, reply=None):
+        async def out(msg):
+            if reply:
+                await reply(msg)
+            else:
+                print(msg)
+
+        from curl_cffi import requests as cffi_requests
+        from urllib.parse import unquote, urlparse
+
+        filename = unquote(os.path.basename(urlparse(url).path))
+        if not filename:
+            filename = "download"
+
+        dest = os.path.join(DOWNLOAD_DIR, filename)
+        await out(f"Downloading: {filename}")
+        if category:
+            await out(f"Category: {category}")
+
+        os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+        await out("Bypassing Cloudflare...")
+        r = cffi_requests.get(url, impersonate="chrome", stream=True, timeout=30)
+        if r.status_code != 200:
+            await out(f"Failed: HTTP {r.status_code}")
+            return
+
+        total = int(r.headers.get("Content-Length", 0))
+        downloaded = 0
+        with open(dest, "wb") as f:
+            for chunk in r.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total:
+                        pct = downloaded / total * 100
+                        await out(f"  {downloaded:,} / {total:,} bytes ({pct:.1f}%)")
+
+        await out("Download complete")
+        fix_perms(dest)
+        moved, msg_text = auto_move(dest, category)
+        await out(msg_text)
+        if moved and JELLYFIN_API_KEY:
+            jellyfin_refresh()
+            await out("Jellyfin scan triggered")
+
     # --- CLI commands ---
 
     async def cmd_login():
@@ -463,6 +509,10 @@ data:
     async def cmd_gdrive(url, category=None):
         os.makedirs(DOWNLOAD_DIR, exist_ok=True)
         await do_gdrive_download(url, category=category)
+
+    async def cmd_direct(url, category=None):
+        os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+        await do_direct_download(url, category=category)
 
     async def cmd_refresh():
         if not JELLYFIN_API_KEY:
@@ -531,6 +581,8 @@ data:
                         "  (none) -> /data/tv/{Show}/Season NN/\n"
                         "/gdrive <url> [anime|series|movie]\n"
                         "  Download public Google Drive folder + auto-move\n"
+                        "/direct <url> [anime|series|movie]\n"
+                        "  Download direct link (bypasses Cloudflare) + auto-move\n"
                         "/rename [--move] [anime|series|movie] - Manually process download dir\n"
                         "/refresh - Trigger Jellyfin scan\n"
                         "/status - Show bot status"
@@ -582,6 +634,23 @@ data:
                     try:
                         os.makedirs(DOWNLOAD_DIR, exist_ok=True)
                         await do_gdrive_download(url, category=category, reply=event.reply)
+                    finally:
+                        download_busy = False
+                elif cmd == "/direct":
+                    if not args:
+                        await event.reply("Usage: /direct <url> [anime|series|movie]")
+                        return
+                    if download_busy:
+                        await event.reply("Download in progress, please wait.")
+                        return
+                    url = args[0]
+                    category = None
+                    if len(args) >= 2 and args[1].lower() in ("anime", "series", "movie"):
+                        category = args[1].lower()
+                    download_busy = True
+                    try:
+                        os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+                        await do_direct_download(url, category=category, reply=event.reply)
                     finally:
                         download_busy = False
                 elif cmd == "/refresh":
@@ -636,6 +705,10 @@ data:
         p_gdrive.add_argument("url", help="Google Drive folder URL or ID")
         p_gdrive.add_argument("--category", choices=["anime", "series", "movie"], help="Library subdirectory")
 
+        p_direct = sub.add_parser("direct", help="Download direct link (bypasses Cloudflare)")
+        p_direct.add_argument("url", help="Direct download URL")
+        p_direct.add_argument("--category", choices=["anime", "series", "movie"], help="Library subdirectory")
+
         args = parser.parse_args()
 
         if args.command == "login":
@@ -654,6 +727,8 @@ data:
             asyncio.run(do_rename(move=args.move, dry_run=args.dry_run, category=args.category))
         elif args.command == "gdrive":
             asyncio.run(cmd_gdrive(args.url, category=args.category))
+        elif args.command == "direct":
+            asyncio.run(cmd_direct(args.url, category=args.category))
 
     if __name__ == "__main__":
         main()
@@ -681,7 +756,7 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
         - |
-          pip install --quiet telethon gdown && python /app/tg-media.py serve
+          pip install --quiet telethon gdown curl_cffi && python /app/tg-media.py serve
         env:
         - name: TELEGRAM_API_ID
           valueFrom:
