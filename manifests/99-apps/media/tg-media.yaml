@@ -429,6 +429,7 @@ data:
 
         from curl_cffi import requests as cffi_requests
         from urllib.parse import unquote, urlparse
+        import json
 
         filename = unquote(os.path.basename(urlparse(url).path))
         if not filename:
@@ -441,10 +442,48 @@ data:
 
         os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-        await out("Bypassing Cloudflare...")
-        r = cffi_requests.get(url, impersonate="chrome", stream=True, timeout=30)
+        headers = {"Referer": urlparse(url).scheme + "://" + urlparse(url).netloc + "/"}
+
+        # Tier 1: try curl_cffi with Chrome impersonation
+        await out("Trying direct download (Chrome TLS)...")
+        r = cffi_requests.get(url, impersonate="chrome", stream=True, timeout=30, headers=headers)
+
+        # Tier 2: if 403, use FlareSolverr to solve Cloudflare JS challenge
+        if r.status_code == 403:
+            r.close()
+            await out("Blocked by Cloudflare. Using FlareSolverr...")
+
+            base_url = f"{urlparse(url).scheme}://{urlparse(url).netloc}/"
+            fs_payload = {"cmd": "request.get", "url": base_url, "maxTimeout": 60000}
+
+            try:
+                import urllib.request
+                fs_req = urllib.request.Request(
+                    "http://flaresolverr.media.svc.cluster.local:8191/v1",
+                    data=json.dumps(fs_payload).encode(),
+                    headers={"Content-Type": "application/json"},
+                )
+                with urllib.request.urlopen(fs_req, timeout=65) as fs_resp:
+                    fs_data = json.loads(fs_resp.read())
+
+                solution = fs_data.get("solution", {})
+                cookies_list = solution.get("cookies", [])
+                cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in cookies_list)
+                fs_ua = solution.get("userAgent", "")
+                if fs_ua:
+                    headers["User-Agent"] = fs_ua
+                if cookie_str:
+                    headers["Cookie"] = cookie_str
+
+                await out("Cloudflare bypassed. Downloading...")
+                r = cffi_requests.get(url, impersonate="chrome", stream=True, timeout=30, headers=headers)
+            except Exception as e:
+                await out(f"FlareSolverr failed: {e}")
+                return
+
         if r.status_code != 200:
             await out(f"Failed: HTTP {r.status_code}")
+            r.close()
             return
 
         total = int(r.headers.get("Content-Length", 0))
@@ -458,6 +497,7 @@ data:
                         pct = downloaded / total * 100
                         await out(f"  {downloaded:,} / {total:,} bytes ({pct:.1f}%)")
 
+        r.close()
         await out("Download complete")
         fix_perms(dest)
         moved, msg_text = auto_move(dest, category)
