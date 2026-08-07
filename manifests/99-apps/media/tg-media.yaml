@@ -427,9 +427,7 @@ data:
             else:
                 print(msg)
 
-        from curl_cffi import requests as cffi_requests
         from urllib.parse import unquote, urlparse
-        import json
 
         filename = unquote(os.path.basename(urlparse(url).path))
         if not filename:
@@ -442,62 +440,62 @@ data:
 
         os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-        headers = {"Referer": urlparse(url).scheme + "://" + urlparse(url).netloc + "/"}
-
-        # Tier 1: try curl_cffi with Chrome impersonation
-        await out("Trying direct download (Chrome TLS)...")
-        r = cffi_requests.get(url, impersonate="chrome", stream=True, timeout=30, headers=headers)
-
-        # Tier 2: if 403, use FlareSolverr to solve Cloudflare JS challenge
-        if r.status_code == 403:
+        # Tier 1: try curl_cffi (fast, works for simple sites)
+        await out("Trying direct download...")
+        try:
+            from curl_cffi import requests as cffi_requests
+            r = cffi_requests.get(url, impersonate="chrome", stream=True, timeout=30)
+            if r.status_code == 200:
+                total = int(r.headers.get("Content-Length", 0))
+                downloaded = 0
+                with open(dest, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=1024 * 1024):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if total:
+                                pct = downloaded / total * 100
+                                await out(f"  {downloaded:,} / {total:,} bytes ({pct:.1f}%)")
+                r.close()
+                await out("Download complete")
+                fix_perms(dest)
+                moved, msg_text = auto_move(dest, category)
+                await out(msg_text)
+                if moved and JELLYFIN_API_KEY:
+                    jellyfin_refresh()
+                    await out("Jellyfin scan triggered")
+                return
             r.close()
-            await out("Blocked by Cloudflare. Using FlareSolverr...")
+        except Exception:
+            pass
 
-            base_url = f"{urlparse(url).scheme}://{urlparse(url).netloc}/"
-            fs_payload = {"cmd": "request.get", "url": base_url, "maxTimeout": 60000}
+        # Tier 2: use Playwright (real Chromium browser, bypasses everything)
+        await out("Blocked. Using headless browser...")
+        from playwright.async_api import async_playwright
 
-            try:
-                import urllib.request
-                fs_req = urllib.request.Request(
-                    "http://flaresolverr.media.svc.cluster.local:8191/v1",
-                    data=json.dumps(fs_payload).encode(),
-                    headers={"Content-Type": "application/json"},
-                )
-                with urllib.request.urlopen(fs_req, timeout=65) as fs_resp:
-                    fs_data = json.loads(fs_resp.read())
+        base_url = f"{urlparse(url).scheme}://{urlparse(url).netloc}/"
 
-                solution = fs_data.get("solution", {})
-                cookies_list = solution.get("cookies", [])
-                cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in cookies_list)
-                fs_ua = solution.get("userAgent", "")
-                if fs_ua:
-                    headers["User-Agent"] = fs_ua
-                if cookie_str:
-                    headers["Cookie"] = cookie_str
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context()
+            page = await context.new_page()
 
-                await out("Cloudflare bypassed. Downloading...")
-                r = cffi_requests.get(url, impersonate="chrome", stream=True, timeout=30, headers=headers)
-            except Exception as e:
-                await out(f"FlareSolverr failed: {e}")
+            await out("Solving Cloudflare challenge...")
+            await page.goto(base_url, wait_until="networkidle", timeout=60000)
+
+            await out("Downloading through browser session...")
+            response = await context.request.get(url)
+            if not response.ok:
+                await out(f"Failed: HTTP {response.status}")
+                await browser.close()
                 return
 
-        if r.status_code != 200:
-            await out(f"Failed: HTTP {r.status_code}")
-            r.close()
-            return
+            body = await response.body()
+            with open(dest, "wb") as f:
+                f.write(body)
 
-        total = int(r.headers.get("Content-Length", 0))
-        downloaded = 0
-        with open(dest, "wb") as f:
-            for chunk in r.iter_content(chunk_size=1024 * 1024):
-                if chunk:
-                    f.write(chunk)
-                    downloaded += len(chunk)
-                    if total:
-                        pct = downloaded / total * 100
-                        await out(f"  {downloaded:,} / {total:,} bytes ({pct:.1f}%)")
+            await browser.close()
 
-        r.close()
         await out("Download complete")
         fix_perms(dest)
         moved, msg_text = auto_move(dest, category)
@@ -792,7 +790,7 @@ spec:
         kubernetes.io/hostname: pavan-vps
       containers:
       - name: tg-media
-        image: python:3.12-slim
+        image: mcr.microsoft.com/playwright/python:v1.48.0-noble
         command: ["/bin/sh", "-c"]
         args:
         - |
