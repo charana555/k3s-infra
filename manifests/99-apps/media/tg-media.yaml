@@ -476,23 +476,48 @@ data:
         base_url = f"{urlparse(url).scheme}://{urlparse(url).netloc}/"
 
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context()
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                ]
+            )
+            context = await browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+            )
+            await context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
             page = await context.new_page()
 
             await out("Solving Cloudflare challenge...")
             await page.goto(base_url, wait_until="networkidle", timeout=60000)
 
             await out("Downloading through browser session...")
-            response = await context.request.get(url)
-            if not response.ok:
-                await out(f"Failed: HTTP {response.status}")
-                await browser.close()
-                return
-
-            body = await response.body()
-            with open(dest, "wb") as f:
-                f.write(body)
+            try:
+                async with page.expect_download(timeout=0) as download_info:
+                    await page.goto(url)
+                download = await download_info.value
+                await download.save_as(dest)
+            except Exception:
+                # Fallback: use page.evaluate with fetch() inside the browser
+                await out("Trying in-page fetch...")
+                result = await page.evaluate("""
+                    async (url) => {
+                        const r = await fetch(url);
+                        if (!r.ok) return {status: r.status, body: null};
+                        const b = await r.arrayBuffer();
+                        return {status: r.status, body: Array.from(new Uint8Array(b))};
+                    }
+                """, url)
+                if result.get("status") != 200:
+                    await out(f"Failed: HTTP {result.get('status')}")
+                    await browser.close()
+                    return
+                with open(dest, "wb") as f:
+                    f.write(bytes(result["body"]))
 
             await browser.close()
 
