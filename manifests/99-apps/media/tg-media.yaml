@@ -794,7 +794,7 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
         - |
-          pip install --quiet telethon gdown curl_cffi && python /app/tg-media.py serve
+          pip install --quiet telethon gdown curl_cffi playwright && python /app/tg-media.py serve
         env:
         - name: TELEGRAM_API_ID
           valueFrom:
