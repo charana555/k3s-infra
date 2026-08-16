@@ -159,6 +159,8 @@ kubectl get pods -n monitoring -l app=beszel-agent -o wide
 
 [Headlamp](https://headlamp.dev) is an actively maintained Kubernetes web UI, replacing the unmaintained Kubernetes Dashboard. It runs in the `monitoring` namespace behind Traefik at `https://headlamp.charana.dev`. Authentication uses a ServiceAccount bearer token; the backend reaches the API via its own in-cluster service account.
 
+Headlamp includes the AI Assistant plugin (`headlamp_ai_assistant` 0.3.0-alpha). Configure its provider in the Headlamp UI with your OpenAI-compatible/OpenRouter credentials; keep the API key in your password manager or Kubernetes Secret, not in Git.
+
 ### Setup
 
 ```bash
@@ -182,7 +184,7 @@ kubectl apply -f manifests/03-monitoring/headlamp.yaml
 
 | File | Description |
 |------|-------------|
-| `manifests/03-monitoring/headlamp.yaml` | Deployment, Service, Middleware, Certificate, IngressRoutes (headlamp.charana.dev) |
+| `manifests/03-monitoring/headlamp.yaml` | Deployment, AI Assistant plugin, Service, Middleware, Certificate, IngressRoutes (headlamp.charana.dev) |
 | `manifests/03-monitoring/headlamp-rbac.yaml` | `headlamp-admin` ServiceAccount + cluster-admin ClusterRoleBinding + token Secret |
 | `scripts/create-headlamp-token.sh` | Prints/mints a ServiceAccount token for logging in to Headlamp |
 

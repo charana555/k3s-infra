@@ -50,6 +50,13 @@ spec:
           value: "9119"
         - name: HERMES_DASHBOARD_INSECURE
           value: "1"
+        - name: HERMES_DASHBOARD_BASIC_AUTH_USERNAME
+          value: "admin"
+        - name: HERMES_DASHBOARD_BASIC_AUTH_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: hermes-secrets
+              key: dashboard-password
         - name: HERMES_GATEWAY_BOOTSTRAP_STATE
           value: "running"
         - name: OLLAMA_BASE_URL
@@ -94,10 +101,10 @@ spec:
         resources:
           requests:
             memory: "512Mi"
-            cpu: "250m"
+            cpu: "500m"
           limits:
             memory: "2Gi"
-            cpu: "1000m"
+            cpu: "2000m"
         volumeMounts:
         - name: hermes-data
           mountPath: /opt/data

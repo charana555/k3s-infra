@@ -26,6 +26,22 @@ spec:
       serviceAccountName: headlamp-admin
       nodeSelector:
         workload: monitoring
+      initContainers:
+      - name: install-ai-assistant-plugin
+        image: alpine:3.20
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          wget -O /tmp/ai-assistant.tar.gz https://github.com/headlamp-k8s/plugins/releases/download/ai-assistant-0.3.0-alpha/headlamp-k8s-ai-assistant-0.3.0-alpha.tar.gz
+          echo "e025a313a6ff1c4c1788b3a7529939e5133c302c22dffcfde2e928de5a8fa240  /tmp/ai-assistant.tar.gz" | sha256sum -c -
+          mkdir -p /headlamp/plugins
+          tar -xzf /tmp/ai-assistant.tar.gz -C /headlamp/plugins
+        volumeMounts:
+        - name: headlamp-plugins
+          mountPath: /headlamp/plugins
       containers:
       - name: headlamp
         image: ghcr.io/headlamp-k8s/headlamp:v0.43.0
@@ -60,6 +76,12 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 3
           failureThreshold: 3
+        volumeMounts:
+        - name: headlamp-plugins
+          mountPath: /headlamp/plugins
+      volumes:
+      - name: headlamp-plugins
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
