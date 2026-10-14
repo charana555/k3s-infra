@@ -45,6 +45,7 @@ data:
             100.126.165.111 headlamp.charana.dev
             100.126.165.111 pdf.charana.dev
             100.126.165.111 grafana.charana.dev
+            100.126.165.111 bernoulli.charana.dev
             80.225.224.42   charana.dev
             80.225.224.42   www.charana.dev
             80.225.224.42   media.charana.dev
