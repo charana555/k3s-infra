@@ -1,0 +1,65 @@
+---
+# bernoulli.charana.dev - reverse proxy to dsd (Tailscale-only external server)
+#
+# dsd is a friend's server with no public internet exposure. It is shared
+# into this tailnet as dsd.persian-vega.ts.net. Traefik (hostNetwork on
+# charana-vps) dials it over WireGuard at 100.77.128.13:8023, currently
+# via DERP relay (blr). TLS terminates at Traefik; the backend hop rides
+# the encrypted tunnel as plain HTTP.
+#
+# The Service has no selector; the Endpoints object pins the backend to
+# the Tailscale IP. Private zone: split-DNS resolves the host to the VPS
+# Tailscale IP and private-zone-only gates it to tailnet clients.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dsd
+  namespace: apps
+  labels:
+    app: dsd
+spec:
+  ports:
+  - port: 8023
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: dsd
+  namespace: apps
+  labels:
+    app: dsd
+subsets:
+- addresses:
+  - ip: 100.77.128.13
+  ports:
+  - port: 8023
+    protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bernoulli
+  namespace: apps
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: kube-system-private-zone-only@kubernetescrd
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - bernoulli.charana.dev
+    secretName: bernoulli-charana-dev-tls
+  rules:
+  - host: bernoulli.charana.dev
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: dsd
+            port:
+              number: 8023

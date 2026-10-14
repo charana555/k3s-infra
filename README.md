@@ -216,6 +216,7 @@ Non-Tailscale clients hitting a private service get a **403 Forbidden** from Tra
 | `beszel.charana.dev` | private |
 | `headlamp.charana.dev` | private |
 | `pdf.charana.dev` (stirling-pdf) | private |
+| `bernoulli.charana.dev` (proxy to dsd, a Tailscale-only external server) | private |
 
 ### How it works
 
