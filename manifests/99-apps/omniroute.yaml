@@ -1,0 +1,145 @@
+---
+# OmniRoute - AI Gateway with Automatic Fallback
+# Aggregates 376+ AI providers behind one endpoint with compression & resilience
+# Storage: SQLite with AES-256-GCM encryption at rest
+# Memory: 8Gi heap + 10Gi container limit for coding agents (Codex, Claude Code, etc.)
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: omniroute-data
+  namespace: apps
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: omniroute
+  namespace: apps
+  labels:
+    app: omniroute
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # SQLite requires single-writer access
+  selector:
+    matchLabels:
+      app: omniroute
+  template:
+    metadata:
+      labels:
+        app: omniroute
+    spec:
+      containers:
+      - name: omniroute
+        image: diegosouzapw/omniroute:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 20128
+          protocol: TCP
+          name: http
+        env:
+        - name: PORT
+          value: "20128"
+        - name: NODE_ENV
+          value: "production"
+        - name: DATA_DIR
+          value: "/app/data"
+        # Heap size for coding agents (Claude Code, Codex, Grok Build)
+        # 8Gi heap supports 1-2 concurrent long-context /v1/responses requests
+        - name: OMNIROUTE_MEMORY_MB
+          value: "8192"
+        # CRITICAL: AES-256-GCM encryption key for credentials at rest
+        # Generate with: openssl rand -hex 32
+        # Store the key securely - losing it means losing all provider credentials
+        - name: STORAGE_ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: omniroute-encryption
+              key: storage-encryption-key
+        # Optional: API key encryption (separate from storage encryption)
+        # - name: API_KEY_SECRET
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: omniroute-encryption
+        #       key: api-key-secret
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "2Gi"
+          limits:
+            cpu: "2000m"
+            memory: "10Gi"  # Higher than heap for native buffers + OS overhead
+        volumeMounts:
+        - name: omniroute-data
+          mountPath: /app/data
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 20128
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 20128
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: omniroute-data
+        persistentVolumeClaim:
+          claimName: omniroute-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: omniroute
+  namespace: apps
+  labels:
+    app: omniroute
+spec:
+  selector:
+    app: omniroute
+  ports:
+  - port: 80
+    targetPort: 20128
+    protocol: TCP
+    name: http
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: omniroute
+  namespace: apps
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    # Private zone only - accessible via Tailscale
+    traefik.ingress.kubernetes.io/router.middlewares: kube-system-private-zone-only@kubernetescrd
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - omniroute.charana.dev
+    secretName: omniroute-charana-dev-tls
+  rules:
+  - host: omniroute.charana.dev
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: omniroute
+            port:
+              number: 80
