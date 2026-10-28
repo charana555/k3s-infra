@@ -43,10 +43,7 @@ spec:
         - name: OPENAI_API_BASE_URL
           value: "http://omniroute.apps.svc.cluster.local/v1"
         - name: OPENAI_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: omniroute-webui-key
-              key: api-key
+          value: "omniroute-internal-key"
         - name: WEBUI_AUTH
           value: "true"
         resources:
