@@ -39,13 +39,13 @@ spec:
           protocol: TCP
         env:
         - name: OLLAMA_BASE_URL
-          value: "http://ollama.llm.svc.cluster.local:11434"
+          value: ""
         - name: OPENAI_API_BASE_URL
-          value: "https://openrouter.ai/api/v1"
+          value: "http://omniroute.apps.svc.cluster.local/v1"
         - name: OPENAI_API_KEY
           valueFrom:
             secretKeyRef:
-              name: openrouter-api-key
+              name: omniroute-webui-key
               key: api-key
         - name: WEBUI_AUTH
           value: "true"
