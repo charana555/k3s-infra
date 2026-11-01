@@ -63,6 +63,11 @@ spec:
             secretKeyRef:
               name: omniroute-encryption
               key: storage-encryption-key
+        - name: INITIAL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: omniroute-encryption
+              key: initial-password
         # Optional: API key encryption (separate from storage encryption)
         # - name: API_KEY_SECRET
         #   valueFrom:

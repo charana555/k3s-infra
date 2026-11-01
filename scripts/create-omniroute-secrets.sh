@@ -1,23 +1,22 @@
 #!/bin/bash
-# Create OmniRoute secrets with encryption keys
+# Create OmniRoute secrets with encryption keys and initial password
 # Usage: ./scripts/create-omniroute-secrets.sh
 
 set -e
 
-echo "=== OmniRoute Secret Generator ==="
+echo "=== OmniRoute Secret & Password Generator ==="
 echo ""
 echo "This script creates the omniroute-encryption secret in the apps namespace."
-echo "The encryption key secures provider credentials (API keys, OAuth tokens) at rest."
-echo ""
-echo "⚠️  CRITICAL: Back up the generated key securely (password manager, KMS)."
-echo "   Losing the key means losing access to ALL provider credentials."
+echo "It includes:"
+echo "  1. Storage encryption key (AES-256-GCM for credentials at rest)"
+echo "  2. Initial admin password (bypasses loopback check when behind reverse proxy)"
 echo ""
 
 # Check if secret already exists
 if kubectl get secret omniroute-encryption -n apps >/dev/null 2>&1; then
   echo "❌ Secret 'omniroute-encryption' already exists in namespace 'apps'"
   echo ""
-  read -p "Do you want to REPLACE it? This will break existing encrypted data! (yes/no): " confirm
+  read -p "Do you want to REPLACE it? (yes/no): " confirm
   if [ "$confirm" != "yes" ]; then
     echo "Aborted."
     exit 1
@@ -36,44 +35,40 @@ if [ -z "$STORAGE_KEY" ]; then
   exit 1
 fi
 
-echo "✅ Generated 256-bit encryption key"
+# Prompt for initial password or generate one
 echo ""
+read -p "Enter initial admin password (leave blank to auto-generate): " INITIAL_PASS
+if [ -z "$INITIAL_PASS" ]; then
+  INITIAL_PASS=$(openssl rand -base64 16)
+  echo "Generated random initial password: $INITIAL_PASS"
+fi
 
-# Display the key (user should save it)
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🔑 STORAGE ENCRYPTION KEY (save this securely!):"
 echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🔑 STORAGE ENCRYPTION KEY (save securely!):"
 echo "$STORAGE_KEY"
 echo ""
+echo "👤 INITIAL ADMIN PASSWORD (use this to log in behind Traefik):"
+echo "$INITIAL_PASS"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "💾 Save this key in a secure location:"
-echo "   - Password manager (1Password, Bitwarden, etc.)"
-echo "   - KMS (AWS Secrets Manager, Google Secret Manager, etc.)"
-echo "   - Encrypted backup (NOT in Git)"
+
+read -p "Press ENTER when you have saved both credentials securely..."
 echo ""
 
-read -p "Press ENTER when you have saved the key securely..."
-echo ""
-
-# Create the secret
+# Create the secret with both keys
 echo "📦 Creating Kubernetes secret..."
 kubectl create secret generic omniroute-encryption \
   -n apps \
-  --from-literal=storage-encryption-key="$STORAGE_KEY"
+  --from-literal=storage-encryption-key="$STORAGE_KEY" \
+  --from-literal=initial-password="$INITIAL_PASS"
 
 if [ $? -eq 0 ]; then
   echo "✅ Secret 'omniroute-encryption' created successfully in namespace 'apps'"
   echo ""
   echo "Next steps:"
-  echo "  1. Deploy OmniRoute: kubectl apply -f manifests/99-apps/omniroute.yaml"
-  echo "  2. Verify deployment: kubectl get pods -n apps -l app=omniroute"
-  echo "  3. Check logs: kubectl logs -n apps -l app=omniroute -f"
-  echo "  4. Access dashboard: https://omniroute.charana.dev (Tailscale only)"
-  echo ""
-  echo "🔐 Backup strategy:"
-  echo "  - Database: kubectl exec -n apps deployment/omniroute -- sqlite3 /app/data/storage.sqlite \".backup /app/data/backup.sqlite\""
-  echo "  - Encryption key: Already displayed above (make sure you saved it!)"
+  echo "  1. Restart/apply OmniRoute: kubectl apply -f manifests/99-apps/omniroute.yaml && kubectl rollout restart deployment/omniroute -n apps"
+  echo "  2. Access dashboard: https://omniroute.charana.dev and log in using the initial password above."
 else
   echo "❌ Failed to create secret"
   exit 1
