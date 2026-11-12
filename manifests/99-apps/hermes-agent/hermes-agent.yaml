@@ -98,6 +98,11 @@ spec:
             secretKeyRef:
               name: hermes-secrets
               key: discord-user-id
+        - name: OPENROUTER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openrouter-api-key
+              key: api-key
         resources:
           requests:
             memory: "512Mi"
