@@ -1,0 +1,13 @@
+---
+# Traefik terminates TLS and forwards plain HTTP to argocd-server. In default
+# (secure) mode argocd-server redirects every plain-HTTP request back to
+# https://, which loops forever behind the proxy. server.insecure=true makes
+# it accept the plain-HTTP hop from Traefik; TLS still ends at Traefik.
+# Consumed via argocd-cmd-params-cm (ARGOCD_SERVER_INSECURE) per install.yaml.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cmd-params-cm
+  namespace: argocd
+data:
+  server.insecure: "true"

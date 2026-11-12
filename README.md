@@ -236,7 +236,8 @@ argocd app sync k3s-infra
 | File | Description |
 |------|-------------|
 | `manifests/08-argocd/namespace.yaml` | argocd namespace |
-| `manifests/08-argocd/install.yaml` | Job that runs official ArgoCD install manifest (v3.6.1) |
+| `manifests/08-argocd/install.yaml` | Job that runs official ArgoCD install manifest (v3.6.1, server-side apply) |
+| `manifests/08-argocd/argocd-cmd-params.yaml` | `server.insecure=true` - argocd-server accepts the plain-HTTP hop from TLS-terminating Traefik (prevents redirect loop) |
 | `manifests/08-argocd/application.yaml` | Application resource tracking this repo's manifests/ on main |
 | `manifests/08-argocd/ingress.yaml` | Ingress + Certificate for argocd.charana.dev (private zone) |
 
