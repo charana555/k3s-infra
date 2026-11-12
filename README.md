@@ -188,6 +188,58 @@ kubectl apply -f manifests/03-monitoring/headlamp.yaml
 | `manifests/03-monitoring/headlamp-rbac.yaml` | `headlamp-admin` ServiceAccount + cluster-admin ClusterRoleBinding + token Secret |
 | `scripts/create-headlamp-token.sh` | Prints/mints a ServiceAccount token for logging in to Headlamp |
 
+## GitOps with ArgoCD
+
+ArgoCD provides automated deployment on every push to `main`. Changes merged to `main` are automatically synced to the cluster.
+
+### Setup
+
+```bash
+# 1. Apply namespace
+kubectl apply -f manifests/08-argocd/namespace.yaml
+
+# 2. Install ArgoCD (runs official install.yaml via Job)
+kubectl apply -f manifests/08-argocd/install.yaml
+
+# 3. Wait for ArgoCD to be ready
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=argocd-server -n argocd --timeout=300s
+
+# 4. Create the Application (points to this repo's manifests/)
+kubectl apply -f manifests/08-argocd/application.yaml
+
+# 5. Apply ingress for UI access
+kubectl apply -f manifests/08-argocd/ingress.yaml
+
+# 6. Get initial admin password
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d && echo
+
+# 7. Visit https://argocd.charana.dev
+#    Username: admin
+#    Password: (from step 6)
+```
+
+### Auto-Sync Behavior
+
+- **Enabled**: ArgoCD watches `main` branch every 3 minutes
+- **Self-Heal**: Reverts manual `kubectl` changes back to Git state
+- **Prune**: Deletes resources removed from Git
+- **Retry**: 5 attempts with exponential backoff on sync failures
+
+After merging to `main`, changes appear in cluster within 3 minutes. Force sync via UI or:
+
+```bash
+argocd app sync k3s-infra
+```
+
+### Files
+
+| File | Description |
+|------|-------------|
+| `manifests/08-argocd/namespace.yaml` | argocd namespace |
+| `manifests/08-argocd/install.yaml` | Job that runs official ArgoCD install manifest (v3.6.1) |
+| `manifests/08-argocd/application.yaml` | Application resource tracking this repo's manifests/ on main |
+| `manifests/08-argocd/ingress.yaml` | Ingress + Certificate for argocd.charana.dev (private zone) |
+
 
 ## Network Zones (Private / Public)
 
