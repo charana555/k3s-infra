@@ -7,7 +7,7 @@ metadata:
 data:
   install.sh: |
     #!/bin/sh
-    kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.6.1/manifests/install.yaml
+    kubectl apply --server-side --force-conflicts -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.6.1/manifests/install.yaml
 ---
 apiVersion: batch/v1
 kind: Job
