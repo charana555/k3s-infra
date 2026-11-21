@@ -188,6 +188,123 @@ kubectl apply -f manifests/03-monitoring/headlamp.yaml
 | `manifests/03-monitoring/headlamp-rbac.yaml` | `headlamp-admin` ServiceAccount + cluster-admin ClusterRoleBinding + token Secret |
 | `scripts/create-headlamp-token.sh` | Prints/mints a ServiceAccount token for logging in to Headlamp |
 
+## SFTPGo (Node-Specific File Manager)
+
+[SFTPGo](https://github.com/drakkan/sftpgo) v2.7.6 (Community Edition, free) provides a browser/Android-friendly file manager (WebClient), WebAdmin, WebDAV, and SFTP. It runs in the `nas` namespace alongside Nextcloud; all resources are `sftpgo-*` prefixed and share nothing with Nextcloud except the namespace. Candidate Nextcloud replacement - Nextcloud itself is untouched.
+
+### Architecture
+
+```text
+charana-vps                                   pavan-vps
+  sftpgo-charana Deployment (pinned)            sftpgo-pavan Deployment (pinned)
+  /srv/storage  <-  /mnt/data (hostPath rw)     /srv/storage  <-  /mnt/data (hostPath rw)
+  SQLite + SSH keys <- sftpgo-state-charana     SQLite + SSH keys <- sftpgo-state-pavan
+                        (local-path PVC, 1Gi)                           (local-path PVC, 1Gi)
+
+https://cvps.charana.dev      -> Traefik -> sftpgo-charana:8080 (WebClient/WebAdmin/API)
+https://cvps.charana.dev/dav  -> Traefik -> sftpgo-charana:8090 (WebDAV)
+<node tailscale IP>:30022     ->                     sftpgo-charana:2022 (SFTP)
+```
+
+(and mirrored on pavan-vps via `pvps.charana.dev` / port 30023)
+
+- One instance per storage node, pinned via `nodeSelector`. Per-node Deployments instead of a DaemonSet because each instance needs its own Service so `cvps`/`pvps` hostnames always reach their node's instance - a DaemonSet gives all pods identical labels, so per-node Services cannot select them.
+- Each instance has its own SQLite database and SSH host keys on a node-local PVC; databases are never shared across nodes. Pods always return to their node (nodeSelector + node-affine local-path PVs).
+- `/mnt/data` is mounted read/write at `/srv/storage` with **no ownership changes**. Writes are bounded by existing host permissions: media on `pavan-vps` (1000:1000, PUID convention) is fully read/write; Nextcloud data on `charana-vps` (33:1000, group read-only) is browsable but not modifiable - an extra Nextcloud safeguard. Creating new top-level entries in `/srv/storage` additionally requires `/mnt/data` itself to be group-writable on that node (check with `ls -ln /mnt/data`); if not, a one-time non-recursive `sudo chown :1000 /mnt/data` on that node fixes it (decide before running - never recursive chown/chmod on `/mnt/data`).
+- Container runs as the image default uid/gid 1000:1000 (no root); `fsGroup: 1000` on the state PVC. Resources: requests 50m/64Mi, limits 500m/256Mi.
+- Both Ingresses are behind the shared `private-zone-only` middleware - WebClient, WebAdmin, and REST API are reachable only over Tailscale, never from the public internet.
+- HTTPS URL correctness behind Traefik comes from `proxy_allowed` (k3s pod CIDR): SFTPGo trusts `X-Forwarded-For`/`X-Forwarded-Proto` only from Traefik. Traefik preserves the Host header, so WebDAV COPY/MOVE work.
+
+### First-Time Setup
+
+1. **Public DNS (required for Let's Encrypt HTTP-01)**: like the other private hosts, add A records at your DNS provider pointing to the Oracle public IP:
+   - `cvps.charana.dev` -> `80.225.224.42`
+   - `pvps.charana.dev` -> `80.225.224.42`
+
+   Split-DNS records for Tailscale clients are already committed (`manifests/01-networking/split-dns.yaml`), and no Tailscale-admin changes are needed (the whole `charana.dev` zone is already delegated).
+2. Create the initial admin secrets (prompts for per-instance credentials). There is intentionally **no template in `manifests/`** for these (same pattern as `collabora-admin-secret`): the Secrets stay untracked by ArgoCD so self-heal can never revert real credentials. Until they exist, the sftpgo pods wait in `CreateContainerConfigError` (fail-closed):
+   ```bash
+   ./scripts/create-sftpgo-secrets.sh
+   ```
+3. Merge to `main` - ArgoCD deploys within 3 minutes.
+4. In each WebAdmin (`https://cvps.charana.dev/web/admin`, `https://pvps.charana.dev/web/admin`) create a file-manager user:
+   - home directory `/srv/storage`, permissions `*` (or narrower subsets)
+   - a strong, unique password (stored in that node's SQLite)
+   
+   Users are jailed to their home directory - nothing outside `/srv/storage` is reachable.
+
+### Access
+
+| Protocol | charana-vps | pavan-vps |
+|----------|-------------|-----------|
+| WebClient (browser/Android) | `https://cvps.charana.dev/web/client` | `https://pvps.charana.dev/web/client` |
+| WebAdmin | `https://cvps.charana.dev/web/admin` | `https://pvps.charana.dev/web/admin` |
+| WebDAV | `https://cvps.charana.dev/dav` | `https://pvps.charana.dev/dav` |
+| SFTP | `<charana tailscale IP>:30022` | `<pavan tailscale IP>:30023` |
+
+- All HTTP endpoints require Tailscale (private zone).
+- SFTP NodePorts are Tailscale/LAN-only in practice (Oracle INPUT firewall blocks 30022 from the internet; `pavan-vps` sits behind home NAT). To use SFTP on `charana-vps` over Tailscale, open the port on that node: `sudo iptables -I INPUT -p tcp --dport 30022 -j ACCEPT && sudo netfilter-persistent save`.
+
+### Authentication and Secrets
+
+- Admins are seeded once from `sftpgo-secrets-<node>` on first start (`data_provider.create_default_admin` has no effect if an admin already exists). Later secret changes do **not** rotate passwords - use the WebAdmin UI.
+- The Secrets are created out-of-band by `scripts/create-sftpgo-secrets.sh` and are **not tracked by ArgoCD** (no git template), so self-heal can never revert real credentials to placeholders - unlike the older template-based secrets (Beszel/tg-media), which carry that latent risk.
+
+### Persistence, Backup, and Recovery
+
+- Per-instance state: `sftpgo-state-<node>` PVC (1Gi, local-path) - `sftpgo.db` (SQLite, WAL mode) and SSH host keys, stored on the node's disk under `/var/lib/rancher/k3s/storage/`. No `emptyDir` anywhere.
+- Backups: the existing PV restic backup (`./scripts/trigger-backup.sh pv`) covers these PVCs, or copy the PV directory directly.
+- Crash/restart: SQLite WAL + graceful SIGTERM shutdown (`SFTPGO_GRACE_TIME=20`); health/readiness via unauthenticated `/healthz`. Pods return to their pinned node and their own database.
+
+### Upgrade
+
+1. Change the pinned `image:` tag in `manifests/99-apps/sftpgo/sftpgo.yaml` (e.g. `v2.7.7`).
+2. Merge to `main`; ArgoCD restarts each Deployment normally. SQLite schema upgrades run automatically at startup.
+
+### Rollback
+
+```bash
+# Remove SFTPGo entirely (files in /mnt/data are never touched):
+kubectl delete -f manifests/99-apps/sftpgo/
+kubectl -n nas delete pvc sftpgo-state-charana sftpgo-state-pavan   # optional: also drop DBs
+# Or simply git-revert the merge commit and let ArgoCD prune.
+```
+
+Also remove the two public DNS A records if you want them gone. Nextcloud and every other workload are unaffected.
+
+### Post-Deploy Validation Checklist
+
+```bash
+# 1. Placement + health (pods on the right nodes, 1/1 Running)
+kubectl -n nas get pods -l app=sftpgo-charana -o wide
+kubectl -n nas get pods -l app=sftpgo-pavan  -o wide
+
+# 2. HTTPS + node-specific routing (Tailscale on; wrong-node LB impossible by design)
+curl -I https://cvps.charana.dev/web/client    # 200
+curl -I https://pvps.charana.dev/web/client    # 200
+
+# 3. File operations in the WebClient (dedicated sftpgo-test/ dir only):
+#    create dir, upload, download, rename, move, overwrite, delete.
+#    Verify on the matching node's disk:  ls -la /mnt/data/sftpgo-test
+
+# 4. Restart persistence: delete a pod, confirm it returns to its node
+#    with the admin login and SQLite state intact.
+kubectl -n nas delete pod -l app=sftpgo-charana
+
+# 5. Nextcloud untouched: deployments running, PVCs bound as before.
+kubectl -n nas get deploy,sts,cronjob -o wide
+kubectl -n nas get pvc
+```
+
+### Files
+
+| File | Description |
+|------|-------------|
+| `manifests/99-apps/sftpgo/sftpgo.yaml` | Both Deployments, Services (http+webdav), SFTP NodePorts, private-zone Ingresses (cvps/pvps) |
+| `manifests/99-apps/sftpgo/sftpgo-pvcs.yaml` | Per-node state PVCs (local-path, 1Gi) |
+| `scripts/create-sftpgo-secrets.sh` | Creates `sftpgo-secrets-{charana,pavan}` in `nas` (no git template, by design) |
+| `manifests/01-networking/split-dns.yaml` | cvps/pvps split-DNS records for Tailscale clients |
+
 ## GitOps with ArgoCD
 
 ArgoCD provides automated deployment on every push to `main`. Changes merged to `main` are automatically synced to the cluster.
@@ -269,6 +386,7 @@ Non-Tailscale clients hitting a private service get a **403 Forbidden** from Tra
 | `headlamp.charana.dev` | private |
 | `pdf.charana.dev` (stirling-pdf) | private |
 | `bernoulli.charana.dev` (proxy to dsd, a Tailscale-only external server) | private |
+| `cvps.charana.dev` / `pvps.charana.dev` (sftpgo) | private |
 
 ### How it works
 

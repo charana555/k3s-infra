@@ -1,0 +1,396 @@
+---
+# SFTPGo - web-based file manager for node-local /mnt/data storage.
+#
+# Architecture: one instance per storage node, each pinned via
+# nodeSelector so its hostPath /mnt/data and node-local SQLite state
+# (sftpgo-state-* PVC, local-path, bound on the same node) never
+# follow a pod to another node. Per-node Deployments instead of a
+# DaemonSet because each instance needs its own Service for
+# node-specific hostnames (cvps/pvps) - a DaemonSet gives all pods
+# identical labels, so per-node Services cannot select them.
+#
+# Image: drakkan/sftpgo:v2.7.6, runs as uid/gid 1000:1000 (no root).
+# /mnt/data is mounted read/write at /srv/storage with NO ownership
+# changes: writes are limited by existing host permissions. Media
+# files on pavan-vps are 1000:1000 (full read/write). Nextcloud data
+# on charana-vps is 33:1000 with group read+traverse only, so
+# SFTPGo can browse it but not modify it - an extra Nextcloud
+# safeguard, not a bug.
+#
+# Config: image defaults + env overrides only (no ConfigMap).
+#   - httpd 8080: WebClient /web/client, WebAdmin /web/admin,
+#     REST API /api/v2, health /healthz (unauthenticated "ok")
+#   - webdavd 8090 enabled via env (disabled by default), prefix /dav
+#   - sftpd 2022 (SSH host keys persisted in the state PVC)
+#   - proxy_allowed: trust X-Forwarded-For/X-Forwarded-Proto from
+#     Traefik only (k3s pod CIDR); SFTPGo then generates https URLs
+#   - create_default_admin: seeds the first admin from
+#     sftpgo-secrets-<node> on first start only; "has no effect if
+#     an admin account already exists", so later secret changes or
+#     ArgoCD self-heal reverts never touch the real admin.
+#
+# Access (private zone, Tailscale-only, like cloud/photos/office):
+#   - WebClient/WebAdmin: https://cvps.charana.dev, https://pvps.charana.dev
+#   - WebDAV:             https://cvps.charana.dev/dav, https://pvps.charana.dev/dav
+#   - SFTP:               <node Tailscale IP>:30022 (cvps) / :30023 (pvps)
+#
+# Admin API is NOT public: both Ingresses sit behind the shared
+# kube-system-private-zone-only ipAllowList middleware.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sftpgo-charana
+  namespace: nas
+  labels:
+    app: sftpgo-charana
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sftpgo-charana
+  template:
+    metadata:
+      labels:
+        app: sftpgo-charana
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: charana-vps
+      securityContext:
+        fsGroup: 1000
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: sftpgo
+        image: drakkan/sftpgo:v2.7.6
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 8090
+          name: webdav
+          protocol: TCP
+        - containerPort: 2022
+          name: sftp
+          protocol: TCP
+        env:
+        - name: SFTPGO_GRACE_TIME
+          value: "20"
+        - name: SFTPGO_HTTPD__BINDINGS__0__PROXY_ALLOWED
+          value: "10.42.0.0/16"
+        - name: SFTPGO_HTTPD__BINDINGS__0__CLIENT_IP_PROXY_HEADER
+          value: "X-Forwarded-For"
+        - name: SFTPGO_HTTPD__BINDINGS__0__CLIENT_IP_HEADER_DEPTH
+          value: "0"
+        - name: SFTPGO_WEBDAVD__BINDINGS__0__PORT
+          value: "8090"
+        - name: SFTPGO_WEBDAVD__BINDINGS__0__PREFIX
+          value: "/dav"
+        - name: SFTPGO_WEBDAVD__BINDINGS__0__PROXY_ALLOWED
+          value: "10.42.0.0/16"
+        - name: SFTPGO_WEBDAVD__BINDINGS__0__CLIENT_IP_PROXY_HEADER
+          value: "X-Forwarded-For"
+        - name: SFTPGO_DATA_PROVIDER__CREATE_DEFAULT_ADMIN
+          value: "true"
+        - name: SFTPGO_DEFAULT_ADMIN_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: sftpgo-secrets-charana
+              key: admin-username
+        - name: SFTPGO_DEFAULT_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: sftpgo-secrets-charana
+              key: admin-password
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: sftpgo-state
+          mountPath: /var/lib/sftpgo
+        - name: storage
+          mountPath: /srv/storage
+      volumes:
+      - name: sftpgo-state
+        persistentVolumeClaim:
+          claimName: sftpgo-state-charana
+      - name: storage
+        hostPath:
+          path: /mnt/data
+          type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sftpgo-charana
+  namespace: nas
+  labels:
+    app: sftpgo-charana
+spec:
+  selector:
+    app: sftpgo-charana
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  - port: 8090
+    targetPort: 8090
+    protocol: TCP
+    name: webdav
+  type: ClusterIP
+---
+# NodePort for raw SFTP (bypasses Traefik; SSH is not HTTP).
+# Tailscale-only in practice: Oracle's INPUT firewall blocks 30022
+# from the public internet on charana-vps.
+apiVersion: v1
+kind: Service
+metadata:
+  name: sftpgo-sftp-charana
+  namespace: nas
+  labels:
+    app: sftpgo-charana
+spec:
+  selector:
+    app: sftpgo-charana
+  ports:
+  - port: 2022
+    targetPort: 2022
+    protocol: TCP
+    nodePort: 30022
+    name: sftp
+  type: NodePort
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sftpgo-charana
+  namespace: nas
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: kube-system-private-zone-only@kubernetescrd
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - cvps.charana.dev
+    secretName: cvps-charana-dev-tls
+  rules:
+  - host: cvps.charana.dev
+    http:
+      paths:
+      - path: /dav
+        pathType: Prefix
+        backend:
+          service:
+            name: sftpgo-charana
+            port:
+              number: 8090
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: sftpgo-charana
+            port:
+              number: 8080
+---
+# SFTPGo instance for pavan-vps (media storage node).
+# Same design as sftpgo-charana above; see the header comment there.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sftpgo-pavan
+  namespace: nas
+  labels:
+    app: sftpgo-pavan
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sftpgo-pavan
+  template:
+    metadata:
+      labels:
+        app: sftpgo-pavan
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: pavan-vps
+      securityContext:
+        fsGroup: 1000
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: sftpgo
+        image: drakkan/sftpgo:v2.7.6
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 8090
+          name: webdav
+          protocol: TCP
+        - containerPort: 2022
+          name: sftp
+          protocol: TCP
+        env:
+        - name: SFTPGO_GRACE_TIME
+          value: "20"
+        - name: SFTPGO_HTTPD__BINDINGS__0__PROXY_ALLOWED
+          value: "10.42.0.0/16"
+        - name: SFTPGO_HTTPD__BINDINGS__0__CLIENT_IP_PROXY_HEADER
+          value: "X-Forwarded-For"
+        - name: SFTPGO_HTTPD__BINDINGS__0__CLIENT_IP_HEADER_DEPTH
+          value: "0"
+        - name: SFTPGO_WEBDAVD__BINDINGS__0__PORT
+          value: "8090"
+        - name: SFTPGO_WEBDAVD__BINDINGS__0__PREFIX
+          value: "/dav"
+        - name: SFTPGO_WEBDAVD__BINDINGS__0__PROXY_ALLOWED
+          value: "10.42.0.0/16"
+        - name: SFTPGO_WEBDAVD__BINDINGS__0__CLIENT_IP_PROXY_HEADER
+          value: "X-Forwarded-For"
+        - name: SFTPGO_DATA_PROVIDER__CREATE_DEFAULT_ADMIN
+          value: "true"
+        - name: SFTPGO_DEFAULT_ADMIN_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: sftpgo-secrets-pavan
+              key: admin-username
+        - name: SFTPGO_DEFAULT_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: sftpgo-secrets-pavan
+              key: admin-password
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: sftpgo-state
+          mountPath: /var/lib/sftpgo
+        - name: storage
+          mountPath: /srv/storage
+      volumes:
+      - name: sftpgo-state
+        persistentVolumeClaim:
+          claimName: sftpgo-state-pavan
+      - name: storage
+        hostPath:
+          path: /mnt/data
+          type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sftpgo-pavan
+  namespace: nas
+  labels:
+    app: sftpgo-pavan
+spec:
+  selector:
+    app: sftpgo-pavan
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  - port: 8090
+    targetPort: 8090
+    protocol: TCP
+    name: webdav
+  type: ClusterIP
+---
+# NodePort for raw SFTP on pavan-vps (home network, not port-forwarded,
+# so effectively Tailscale/LAN-only).
+apiVersion: v1
+kind: Service
+metadata:
+  name: sftpgo-sftp-pavan
+  namespace: nas
+  labels:
+    app: sftpgo-pavan
+spec:
+  selector:
+    app: sftpgo-pavan
+  ports:
+  - port: 2022
+    targetPort: 2022
+    protocol: TCP
+    nodePort: 30023
+    name: sftp
+  type: NodePort
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sftpgo-pavan
+  namespace: nas
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: kube-system-private-zone-only@kubernetescrd
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - pvps.charana.dev
+    secretName: pvps-charana-dev-tls
+  rules:
+  - host: pvps.charana.dev
+    http:
+      paths:
+      - path: /dav
+        pathType: Prefix
+        backend:
+          service:
+            name: sftpgo-pavan
+            port:
+              number: 8090
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: sftpgo-pavan
+            port:
+              number: 8080

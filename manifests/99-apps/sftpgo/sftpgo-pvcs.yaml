@@ -1,0 +1,38 @@
+---
+# SFTPGo per-node state (SQLite database, private keys, backups).
+#
+# One PVC per instance. Each instance is pinned to its node via
+# nodeSelector, and local-path volumes bind on the node of the first
+# consumer (volumeBindingMode: WaitForFirstConsumer), so state always
+# lives on the same node as the instance that owns it. SQLite databases
+# are never shared between nodes.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sftpgo-state-charana
+  namespace: nas
+  labels:
+    app: sftpgo-charana
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sftpgo-state-pavan
+  namespace: nas
+  labels:
+    app: sftpgo-pavan
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
