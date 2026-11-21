@@ -59,8 +59,6 @@ spec:
               key: dashboard-password
         - name: HERMES_GATEWAY_BOOTSTRAP_STATE
           value: "running"
-        - name: OLLAMA_BASE_URL
-          value: "http://ollama.llm.svc.cluster.local:11434"
         - name: OPENAI_BASE_URL
           value: "https://grid.ai.juspay.net"
         - name: OPENAI_API_KEY

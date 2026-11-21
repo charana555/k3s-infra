@@ -24,10 +24,17 @@ Unused services identified for removal
 - Ollama
 - Open-WebUI
 - Hermes Agent (prashan instance)
+- Omniroute
+- OpenClaw
 
 ### Tools
 - Stirling PDF
 - sample-deployment.yaml template
+
+### Namespaces (archived 2026-11-21)
+- production
+- staging
+- llm
 
 ## Restore
 To restore any service, move manifests back and apply:

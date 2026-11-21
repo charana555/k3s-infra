@@ -1,0 +1,142 @@
+---
+# Omniroute - LLM API router/gateway
+# Archived: 2026-11-21 - cluster cleanup (user no longer using)
+#
+# Restore requirements (not included in this file):
+#   kubectl create secret generic omniroute-encryption \
+#     --from-literal=storage-encryption-key=YOUR_KEY \
+#     --from-literal=initial-password=YOUR_PASSWORD \
+#     -n apps
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: omniroute-data
+  namespace: apps
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: omniroute
+  name: omniroute
+  namespace: apps
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: omniroute
+  template:
+    metadata:
+      labels:
+        app: omniroute
+    spec:
+      containers:
+      - name: omniroute
+        image: diegosouzapw/omniroute:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 20128
+          name: http
+          protocol: TCP
+        env:
+        - name: PORT
+          value: "20128"
+        - name: NODE_ENV
+          value: production
+        - name: DATA_DIR
+          value: /app/data
+        - name: OMNIROUTE_MEMORY_MB
+          value: "8192"
+        - name: STORAGE_ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: omniroute-encryption
+              key: storage-encryption-key
+        - name: INITIAL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: omniroute-encryption
+              key: initial-password
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+          limits:
+            cpu: "2"
+            memory: 10Gi
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 20128
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 20128
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: omniroute-data
+          mountPath: /app/data
+      volumes:
+      - name: omniroute-data
+        persistentVolumeClaim:
+          claimName: omniroute-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: omniroute
+  name: omniroute
+  namespace: apps
+spec:
+  selector:
+    app: omniroute
+  ports:
+  - name: http
+    port: 80
+    targetPort: 20128
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: omniroute
+  namespace: apps
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: kube-system-private-zone-only@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - omniroute.charana.dev
+    secretName: omniroute-charana-dev-tls
+  rules:
+  - host: omniroute.charana.dev
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: omniroute
+            port:
+              number: 80

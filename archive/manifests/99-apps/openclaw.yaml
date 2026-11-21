@@ -1,0 +1,226 @@
+---
+# OpenClaw - AI assistant gateway (Telegram/Discord/OpenRouter/Bedrock)
+# Archived: 2026-11-21 - cluster cleanup (user no longer using)
+#
+# Restore requirements (not included in this file):
+#   1. ServiceAccount:
+#      kubectl create sa openclaw-sa -n apps
+#   2. Secret:
+#      kubectl create secret generic openclaw-secrets \
+#        --from-literal=gateway-token=YOUR_TOKEN \
+#        --from-literal=telegram-bot-token=YOUR_TOKEN \
+#        --from-literal=openrouter-api-key=YOUR_KEY \
+#        --from-literal=gemini-api-key=YOUR_KEY \
+#        --from-literal=bedrock-api-key=YOUR_KEY \
+#        -n apps
+#   3. ConfigMap "openclaw-config" with key "openclaw.json" (the app config)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openclaw-config
+  namespace: apps
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openclaw-workspace
+  namespace: apps
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openclaw-auth-profiles
+  namespace: apps
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: openclaw
+    version: v1
+  name: openclaw
+  namespace: apps
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: openclaw
+  template:
+    metadata:
+      labels:
+        app: openclaw
+        version: v1
+    spec:
+      serviceAccountName: openclaw-sa
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      initContainers:
+      - name: fix-permissions
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - chown -R 1000:1000 /home/node/.openclaw /home/node/.openclaw/workspace /home/node/.config/openclaw 2>/dev/null || true
+        volumeMounts:
+        - name: config
+          mountPath: /home/node/.openclaw
+        - name: workspace
+          mountPath: /home/node/.openclaw/workspace
+        - name: auth-profiles
+          mountPath: /home/node/.config/openclaw
+      containers:
+      - name: openclaw
+        image: ghcr.io/openclaw/openclaw:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 18789
+          protocol: TCP
+        env:
+        - name: NODE_ENV
+          value: production
+        - name: OPENCLAW_DISABLE_BONJOUR
+          value: "1"
+        - name: OPENCLAW_GATEWAY_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: gateway-token
+        - name: TELEGRAM_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: telegram-bot-token
+        - name: OPENROUTER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: openrouter-api-key
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: gemini-api-key
+        - name: AWS_BEARER_TOKEN_BEDROCK
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: bedrock-api-key
+        - name: OPENCLAW_DEBUG_MODEL_TRANSPORT
+          value: "1"
+        - name: OPENCLAW_DEBUG_MODEL_PAYLOAD
+          value: full-redacted
+        - name: OPENCLAW_LOG_LEVEL
+          value: debug
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 1500m
+            memory: 3Gi
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 18789
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 18789
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: config
+          mountPath: /home/node/.openclaw
+        - name: workspace
+          mountPath: /home/node/.openclaw/workspace
+        - name: auth-profiles
+          mountPath: /home/node/.config/openclaw
+        - name: config-file
+          mountPath: /home/node/.openclaw/openclaw.json
+          subPath: openclaw.json
+      volumes:
+      - name: config
+        persistentVolumeClaim:
+          claimName: openclaw-config
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: openclaw-workspace
+      - name: auth-profiles
+        persistentVolumeClaim:
+          claimName: openclaw-auth-profiles
+      - name: config-file
+        configMap:
+          name: openclaw-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: openclaw
+  name: openclaw
+  namespace: apps
+spec:
+  selector:
+    app: openclaw
+  ports:
+  - port: 80
+    targetPort: 18789
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: openclaw
+  namespace: apps
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - openclaw.charana.dev
+    secretName: openclaw-charana-dev-tls
+  rules:
+  - host: openclaw.charana.dev
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: openclaw
+            port:
+              number: 80

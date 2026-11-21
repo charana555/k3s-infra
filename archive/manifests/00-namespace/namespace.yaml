@@ -1,0 +1,30 @@
+---
+# Archived: 2026-11-21 - cluster cleanup (unused namespaces)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    environment: production
+    managed-by: k3s-infra
+    zone: public
+---
+# Archived: 2026-11-21 - cluster cleanup (unused namespace)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+  labels:
+    environment: staging
+    managed-by: k3s-infra
+    zone: public
+---
+# Archived: 2026-11-21 - cluster cleanup (ollama moved to archive/manifests/05-llm/)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: llm
+  labels:
+    environment: llm
+    managed-by: k3s-infra
+    zone: private
