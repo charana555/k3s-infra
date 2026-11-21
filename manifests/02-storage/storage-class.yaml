@@ -9,17 +9,3 @@ metadata:
 provisioner: rancher.io/local-path
 volumeBindingMode: WaitForFirstConsumer
 reclaimPolicy: Delete
----
-# Example: Persistent Volume Claim template
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: example-pvc
-  namespace: production
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: local-path
-  resources:
-    requests:
-      storage: 1Gi

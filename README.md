@@ -263,12 +263,9 @@ Non-Tailscale clients hitting a private service get a **403 Forbidden** from Tra
 | `office.charana.dev` (collabora) | private |
 | `photos.charana.dev` (immich) | private |
 | `radarr` / `prowlarr` / `torrent` / `sonarr` / `lidarr` `.charana.dev` | private |
-| `llm.charana.dev` (open-webui) | private |
 | `ai.charana.dev` (hermes) | private |
-| `prashan-ai.charana.dev` (hermes-prashan) | private |
 | `beszel.charana.dev` | private |
 | `headlamp.charana.dev` | private |
-| `pdf.charana.dev` (stirling-pdf) | private |
 | `bernoulli.charana.dev` (proxy to dsd, a Tailscale-only external server) | private |
 
 ### How it works
