@@ -121,5 +121,5 @@ kubectl port-forward svc/sample-app 8080:80 -n production
 - [ ] Configure Traefik for external access
 - [ ] Set up SSL/TLS certificates
 - [ ] Deploy your applications
-- [ ] Configure monitoring (Prometheus/Grafana)
+- [ ] Configure monitoring (Beszel)
 - [ ] Set up backups

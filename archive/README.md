@@ -12,6 +12,7 @@ Unused services identified for removal
 - Loki (helm)
 - Alloy (helm)
 - Grafana admin secrets
+- deploy-observability.sh (helm releases uninstalled from cluster 2026-11-21; Beszel + Headlamp kept)
 
 ### Backup
 - etcd backup CronJob
