@@ -10,9 +10,26 @@ spec:
     repoURL: https://github.com/charana555/k3s-infra.git
     targetRevision: main
     path: manifests
+    directory:
+      # Without recurse, ArgoCD only reads YAML directly in manifests/ and
+      # skips all subdirectories - every app here lives in a subdirectory,
+      # so the app was silently empty ("Synced" with 0 resources managed).
+      recurse: true
   destination:
     server: https://kubernetes.default.svc
     namespace: default
+  # headlamp-admin is a kubernetes.io/service-account-token Secret: the
+  # token controller populates /data and adds a service-account.uid
+  # annotation after creation. Ignore those controller-owned fields or
+  # the app never converges.
+  ignoreDifferences:
+  - group: ""
+    kind: Secret
+    name: headlamp-admin
+    namespace: monitoring
+    jsonPointers:
+    - /data
+    - /metadata/annotations/kubernetes.io~1service-account.uid
   syncPolicy:
     automated:
       prune: true

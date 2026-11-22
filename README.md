@@ -101,7 +101,7 @@ kubectl get pods -n monitoring -l app=beszel-agent -o wide
 |------|-------------|
 | `manifests/03-monitoring/beszel-hub.yaml` | Hub Deployment, Service, PVC, IngressRoute (beszel.charana.dev) |
 | `manifests/03-monitoring/beszel-agent.yaml` | Agent DaemonSet (hostNetwork, tolerations for all nodes) |
-| `manifests/03-monitoring/beszel-secrets-template.yaml` | Template for KEY/TOKEN/admin creds |
+| `docs/secrets-templates/beszel-secrets-template.yaml` | Template for KEY/TOKEN/admin creds (reference only - not synced; real secrets via `scripts/create-beszel-secrets.sh`) |
 | `scripts/create-beszel-secrets.sh` | Creates the `beszel-secrets` Kubernetes Secret |
 
 ## Kubernetes Web UI (Headlamp)
@@ -297,6 +297,20 @@ After merging to `main`, changes appear in cluster within 3 minutes. Force sync 
 argocd app sync k3s-infra
 ```
 
+### Directory recursion (required or the app manages nothing)
+
+Every app in this repo lives in a **subdirectory** of `manifests/`, and ArgoCD directory-type sources do **not** recurse into subdirectories by default. `spec.source.directory.recurse: true` in `application.yaml` enables it. Without it the Application tracks zero resources yet still shows "Synced/Healthy" - which is exactly how ArgoCD sat green doing nothing until the SFTPGo deploy surfaced it. The Application does not manage itself, so apply any change to it manually:
+
+```bash
+kubectl apply -f manifests/08-argocd/application.yaml
+```
+
+Conventions that keep `selfHeal` safe now that the app manages everything under `manifests/`:
+
+- **No Secret manifests under `manifests/`.** Real secrets are created out-of-band by `scripts/create-*-secrets.sh`; placeholder templates live in `docs/secrets-templates/` as reference only and are never synced. A committed template would let ArgoCD self-heal revert real credentials to their placeholder values.
+- **One-shot bootstrap Jobs are annotated `argocd.argoproj.io/sync-options: Skip`** (`argocd-install`, `init-nextcloud-db`): Job specs are immutable, and re-applying a completed Job errors forever.
+- **Controller-owned fields are ignored via `spec.ignoreDifferences`** (the `headlamp-admin` service-account token Secret, whose `/data` is populated by the token controller).
+
 ### Files
 
 | File | Description |
@@ -304,7 +318,7 @@ argocd app sync k3s-infra
 | `manifests/08-argocd/namespace.yaml` | argocd namespace |
 | `manifests/08-argocd/install.yaml` | Job that runs official ArgoCD install manifest (v3.6.1, server-side apply) |
 | `manifests/08-argocd/argocd-cmd-params.yaml` | `server.insecure=true` - argocd-server accepts the plain-HTTP hop from TLS-terminating Traefik (prevents redirect loop) |
-| `manifests/08-argocd/application.yaml` | Application resource tracking this repo's manifests/ on main |
+| `manifests/08-argocd/application.yaml` | Application resource tracking this repo's manifests/ on main (directory recursion + self-heal safety conventions) |
 | `manifests/08-argocd/ingress.yaml` | Ingress + Certificate for argocd.charana.dev (private zone) |
 
 

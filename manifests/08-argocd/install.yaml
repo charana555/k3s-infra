@@ -14,6 +14,10 @@ kind: Job
 metadata:
   name: argocd-install
   namespace: argocd
+  annotations:
+    # One-shot bootstrap job; Job specs are immutable, so ArgoCD must not
+    # try to re-apply it on every sync.
+    argocd.argoproj.io/sync-options: Skip
 spec:
   template:
     spec:

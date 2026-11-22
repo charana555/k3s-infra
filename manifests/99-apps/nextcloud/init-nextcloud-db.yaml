@@ -6,6 +6,10 @@ metadata:
   namespace: nas
   labels:
     app: init-nextcloud-db
+  annotations:
+    # One-shot bootstrap job; Job specs are immutable, so ArgoCD must not
+    # try to re-apply it on every sync.
+    argocd.argoproj.io/sync-options: Skip
 spec:
   template:
     metadata:
