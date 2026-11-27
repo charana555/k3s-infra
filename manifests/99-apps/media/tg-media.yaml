@@ -19,6 +19,7 @@ data:
     import argparse
     import os
     import re
+    import shlex
     import shutil
     import sys
     import asyncio
@@ -420,44 +421,110 @@ data:
             jellyfin_refresh()
             await out("Jellyfin scan triggered")
 
-    async def do_direct_download(url, category=None, reply=None):
+    def parse_content_disposition(header):
+        """Extract filename from a Content-Disposition header, or None."""
+        if not header:
+            return None
+        m = re.search(r"filename\*\s*=\s*UTF-8''([^;]+)", header, re.IGNORECASE)
+        if m:
+            from urllib.parse import unquote
+            return os.path.basename(unquote(m.group(1).strip()))
+        m = re.search(r'filename\s*=\s*"([^"]+)"', header) or re.search(r"filename\s*=\s*([^;]+)", header)
+        return os.path.basename(m.group(1).strip()) if m else None
+
+    def filename_from_url(url):
+        """Last-resort filename from the URL path. Opaque signed URLs (googleusercontent) have none."""
+        from urllib.parse import unquote, urlparse
+        name = unquote(os.path.basename(urlparse(url).path))
+        if not name or len(name) > 128 or not os.path.splitext(name)[1]:
+            return None
+        return name
+
+    def pop_option(args, flag):
+        """Extract --flag value from a bot arg list. Returns (value or None, remaining)."""
+        args = list(args)
+        if flag not in args:
+            return None, args
+        i = args.index(flag)
+        if i + 1 >= len(args):
+            return None, args[:i]
+        return args[i + 1], args[:i] + args[i + 2:]
+
+    async def do_direct_download(url, category=None, reply=None, name=None):
         async def out(msg):
             if reply:
                 await reply(msg)
             else:
                 print(msg)
 
-        from urllib.parse import unquote, urlparse
-
-        filename = unquote(os.path.basename(urlparse(url).path))
-        if not filename:
-            filename = "download"
-
-        dest = os.path.join(DOWNLOAD_DIR, filename)
-        await out(f"Downloading: {filename}")
-        if category:
-            await out(f"Category: {category}")
+        # Never let a name escape the download dir; auto_move handles placement
+        name = os.path.basename(name) if name else None
 
         os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+        if category:
+            await out(f"Category: {category}")
 
         # Tier 1: try curl_cffi (fast, works for simple sites)
         await out("Trying direct download...")
         try:
             from curl_cffi import requests as cffi_requests
-            r = cffi_requests.get(url, impersonate="chrome", stream=True, timeout=30)
+
+            # Probe for status + Content-Disposition: opaque signed URLs
+            # (e.g. video-downloads.googleusercontent.com) carry no filename in
+            # the path, only in the response headers.
+            r = cffi_requests.get(url, impersonate="chrome", stream=True, timeout=60)
             if r.status_code == 200:
-                total = int(r.headers.get("Content-Length", 0))
-                downloaded = 0
-                with open(dest, "wb") as f:
-                    for chunk in r.iter_content(chunk_size=1024 * 1024):
-                        if chunk:
+                filename = (name
+                            or parse_content_disposition(r.headers.get("Content-Disposition"))
+                            or filename_from_url(url)
+                            or "download")
+                dest = os.path.join(DOWNLOAD_DIR, filename)
+                part = dest + ".part"
+                done = False
+
+                offset = os.path.getsize(part) if os.path.exists(part) else 0
+                if offset:
+                    r.close()
+                    await out(f"Partial file found ({offset:,} bytes), resuming...")
+                    r = cffi_requests.get(url, impersonate="chrome", stream=True, timeout=60,
+                                          headers={"Range": f"bytes={offset}-"})
+                    if r.status_code == 416:
+                        # Range past EOF: wget --continue treats this as already complete
+                        r.close()
+                        os.rename(part, dest)
+                        await out("Partial file already complete")
+                        done = True
+                    elif r.status_code == 200:
+                        await out("Server does not support resume, restarting from scratch")
+                        offset = 0
+                    elif r.status_code != 206:
+                        r.close()
+                        await out(f"Resume failed: HTTP {r.status_code} (link expired?) - partial kept at {part}")
+                        return
+
+                if not done:
+                    total = int(r.headers.get("Content-Length", 0)) + offset
+                    downloaded = offset
+                    next_report = 0
+                    with open(part, "ab" if offset else "wb") as f:
+                        for chunk in r.iter_content(chunk_size=1024 * 1024):
+                            if not chunk:
+                                continue
                             f.write(chunk)
                             downloaded += len(chunk)
+                            if downloaded < next_report:
+                                continue
                             if total:
                                 pct = downloaded / total * 100
                                 await out(f"  {downloaded:,} / {total:,} bytes ({pct:.1f}%)")
-                r.close()
-                await out("Download complete")
+                                next_report = downloaded + max(total // 10, 1024 * 1024)
+                            else:
+                                await out(f"  {downloaded:,} bytes")
+                                next_report = downloaded + 256 * 1024 * 1024
+                    r.close()
+                    os.rename(part, dest)
+                    await out(f"Download complete: {filename}")
+
                 fix_perms(dest)
                 moved, msg_text = auto_move(dest, category)
                 await out(msg_text)
@@ -471,6 +538,7 @@ data:
 
         # Tier 2: use Playwright (real Chromium browser, bypasses everything)
         await out("Blocked. Using headless browser...")
+        from urllib.parse import urlparse
         from playwright.async_api import async_playwright
 
         base_url = f"{urlparse(url).scheme}://{urlparse(url).netloc}/"
@@ -500,6 +568,8 @@ data:
                 async with page.expect_download(timeout=0) as download_info:
                     await page.goto(url)
                 download = await download_info.value
+                filename = name or download.suggested_filename or filename_from_url(url) or "download"
+                dest = os.path.join(DOWNLOAD_DIR, filename)
                 await download.save_as(dest)
             except Exception:
                 # Fallback: use page.evaluate with fetch() inside the browser
@@ -516,6 +586,8 @@ data:
                     await out(f"Failed: HTTP {result.get('status')}")
                     await browser.close()
                     return
+                filename = name or filename_from_url(url) or "download"
+                dest = os.path.join(DOWNLOAD_DIR, filename)
                 with open(dest, "wb") as f:
                     f.write(bytes(result["body"]))
 
@@ -573,9 +645,9 @@ data:
         os.makedirs(DOWNLOAD_DIR, exist_ok=True)
         await do_gdrive_download(url, category=category)
 
-    async def cmd_direct(url, category=None):
+    async def cmd_direct(url, category=None, name=None):
         os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-        await do_direct_download(url, category=category)
+        await do_direct_download(url, category=category, name=name)
 
     async def cmd_refresh():
         if not JELLYFIN_API_KEY:
@@ -624,7 +696,11 @@ data:
             if event.sender_id not in allowed_users:
                 return
 
-            parts = (event.raw_text or "").split()
+            try:
+                parts = shlex.split(event.raw_text or "")
+            except ValueError:
+                await event.reply("Error: unbalanced quotes")
+                return
             if not parts:
                 return
             cmd = parts[0].lower()
@@ -644,8 +720,9 @@ data:
                         "  (none) -> /data/tv/{Show}/Season NN/\n"
                         "/gdrive <url> [anime|series|movie]\n"
                         "  Download public Google Drive folder + auto-move\n"
-                        "/direct <url> [anime|series|movie]\n"
-                        "  Download direct link (bypasses Cloudflare) + auto-move\n"
+                        "/direct <url> [anime|series|movie] [--name <filename>]\n"
+                        "  Download direct link (resumable, bypasses Cloudflare) + auto-move\n"
+                        "  --name sets the final filename (default: Content-Disposition)\n"
                         "/rename [--move] [anime|series|movie] - Manually process download dir\n"
                         "/refresh - Trigger Jellyfin scan\n"
                         "/status - Show bot status"
@@ -700,20 +777,21 @@ data:
                     finally:
                         download_busy = False
                 elif cmd == "/direct":
-                    if not args:
-                        await event.reply("Usage: /direct <url> [anime|series|movie]")
+                    name, rest = pop_option(args, "--name")
+                    if not rest:
+                        await event.reply("Usage: /direct <url> [anime|series|movie] [--name <filename>]")
                         return
                     if download_busy:
                         await event.reply("Download in progress, please wait.")
                         return
-                    url = args[0]
+                    url = rest[0]
                     category = None
-                    if len(args) >= 2 and args[1].lower() in ("anime", "series", "movie"):
-                        category = args[1].lower()
+                    if len(rest) >= 2 and rest[1].lower() in ("anime", "series", "movie"):
+                        category = rest[1].lower()
                     download_busy = True
                     try:
                         os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-                        await do_direct_download(url, category=category, reply=event.reply)
+                        await do_direct_download(url, category=category, reply=event.reply, name=name)
                     finally:
                         download_busy = False
                 elif cmd == "/refresh":
@@ -771,6 +849,7 @@ data:
         p_direct = sub.add_parser("direct", help="Download direct link (bypasses Cloudflare)")
         p_direct.add_argument("url", help="Direct download URL")
         p_direct.add_argument("--category", choices=["anime", "series", "movie"], help="Library subdirectory")
+        p_direct.add_argument("--name", help="Output filename (default: Content-Disposition)")
 
         args = parser.parse_args()
 
@@ -791,7 +870,7 @@ data:
         elif args.command == "gdrive":
             asyncio.run(cmd_gdrive(args.url, category=args.category))
         elif args.command == "direct":
-            asyncio.run(cmd_direct(args.url, category=args.category))
+            asyncio.run(cmd_direct(args.url, category=args.category, name=args.name))
 
     if __name__ == "__main__":
         main()
